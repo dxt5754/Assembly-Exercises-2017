@@ -1,0 +1,96 @@
+GetStringSB
+;Save initial values and initialize R2
+	PUSH {R1, R2, R3, LR}
+	MOVS R2, #0 
+GETIN
+;get the character to be stored
+        BL      GetChar	
+;check if CR
+	CMP R3, #13
+	BEQ ENDSTRGT
+	CMP R1, #1
+	BEQ GETIN
+;Echo character to the terminal
+	PUSH {R0} 
+	MOVS R0, R3 
+	BL PutChar
+	POP {R0}
+	STRB R3, [R0, R2]
+;one less char to read
+        SUBS    R1, R1, #1
+;string offset
+	ADDS	R2, R2, #1	
+        B GETIN	
+ENDSTRGT
+	POP {R1, R2, R3, LR}
+
+				
+PutStringSB
+	PUSH {R1, R3, LR}
+;get string length
+	BL LengthStringSB
+	MOVS R1, R2	
+GETCHAR
+		
+;end subroutine if completed
+	CMP R1, #0
+	BEQ PUTSTRSTP
+;store next char in R3
+        LDRB R3, [R0, #0]
+;echo char
+	PUSH {R0} ;Preserve state of R0 and LR
+	MOVS R0, R3 ;Move char in R3 for transit
+	BL PutChar
+	POP {R0}
+;--1 char from string to be read
+        SUBS    R1, R1, #1
+;add offset
+	ADDS	R0, R0, #1
+     	B GETCHAR	
+PUTSTRSTP
+	POP {R1, R3, LR}
+		
+PutNumU
+;Divide R0 value by 10 and print remainder
+		
+	PUSH {R0, R1, R2, LR}
+;Initalize Array offset to Zero
+	MOVS R2, #0
+		
+DIVIN
+;Num is too small to divide by 10
+	CMP 	R0, #10
+	BLT 	FINDIVIN
+;Move dividend to R1, set divisor to 10
+	MOVS R1, R0
+	MOVS R0, #10
+;R1 / R0 = R0 Remainder R1
+;this is the DIVU written for a previous lab	
+	BL DIVU			
+;Print remainder stored in R1
+	PUSH {R0}
+	LDR R0, =FlipString
+	STRB R1, [R0, R2]
+	ADDS R2, R2, #1
+	POP {R0}
+;repeat until num is no longer divisible by 10
+	B DIVIN
+FINDIVIN
+;Convert to ASCII Value
+	ADDS R0, R0, #'0'
+	BL PutChar
+	SUBS R2, R2, #1
+PRNTCHR		
+;Iterate over array and print
+	LDR R0, =FlipString
+	CMP R2, #0
+	BLT QUITPUTNUM
+	LDRB R1, [R0, R2]
+	MOVS R0, R1
+;Convert to ASCII Character and Print
+	ADDS R0, R0, #'0'
+	BL PutChar
+	SUBS R2, R2, #1
+	B PRNTCHR
+QUITPUTNUM
+	POP{R0, R1, R2, LR}

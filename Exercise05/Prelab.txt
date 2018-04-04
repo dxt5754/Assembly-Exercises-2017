@@ -1,0 +1,107 @@
+Dean Trivisani 9/25/17
+Exercise 05 Prelab	
+
+Init_UART0_Polling
+
+;Store initial values of R0, R1, and R2
+	PUSH {R0,R1,R2}
+;Select MCGPLLCLK / 2 as UART0 clock source
+        LDR R0,=SIM_SOPT2
+        LDR R1,=SIM_SOPT2_UART0SRC_MASK
+        LDR R2,[R0,#0]
+        BICS R2,R2,R1
+        LDR R1,=SIM_SOPT2_UART0_MCGPLLCLK_DIV2
+        ORRS R2,R2,R1
+        STR R2,[R0,#0]
+;Enable external connection for UART0
+        LDR R0,=SIM_SOPT5
+        LDR R1,= SIM_SOPT5_UART0_EXTERN_MASK_CLEAR
+        LDR R2,[R0,#0]
+        BICS R2,R2,R1
+        STR R2,[R0,#0]
+;Enable clock for UART0 module
+        LDR R0,=SIM_SCGC4
+        LDR R1,= SIM_SCGC4_UART0_MASK
+        LDR R2,[R0,#0]
+        ORRS R2,R2,R1
+        STR R2,[R0,#0]
+;Enable clock for Port A module
+        LDR R0,=SIM_SCGC5
+        LDR R1,= SIM_SCGC5_PORTA_MASK
+        LDR R2,[R0,#0]
+        ORRS R2,R2,R1
+        STR R2,[R0,#0]
+;Connect PORT A Pin 1 (PTA1) to UART0 Rx (J1 Pin 02)
+        LDR R0,=PORTA_PCR1
+        LDR R1,=PORT_PCR_SET_PTA1_UART0_RX
+        STR R1,[R0,#0]
+;Connect PORT A Pin 2 (PTA2) to UART0 Tx (J1 Pin 04)
+        LDR R0,=PORTA_PCR2
+        LDR R1,=PORT_PCR_SET_PTA2_UART0_TX
+        STR R1,[R0,#0] 
+;Disable UART0 receiver and transmitter
+        LDR R0,=UART0_BASE
+        MOVS R1,#UART0_C2_T_R
+        LDRB R2,[R0,#UART0_C2_OFFSET]
+        BICS R2,R2,R1
+        STRB R2,[R0,#UART0_C2_OFFSET]
+;Set UART0 for 9600 baud, 8N1 protocol
+        MOVS R1,#UART0_BDH_9600
+        STRB R1,[R0,#UART0_BDH_OFFSET]
+        MOVS R1,#UART0_BDL_9600
+        STRB R1,[R0,#UART0_BDL_OFFSET]
+        MOVS R1,#UART0_C1_8N1
+        STRB R1,[R0,#UART0_C1_OFFSET]
+        MOVS R1,#UART0_C3_NO_TXINV
+        STRB R1,[R0,#UART0_C3_OFFSET]
+        MOVS R1,#UART0_C4_NO_MATCH_OSR_16
+        STRB R1,[R0,#UART0_C4_OFFSET]
+        MOVS R1,#UART0_C5_NO_DMA_SSR_SYNC
+        STRB R1,[R0,#UART0_C5_OFFSET]
+        MOVS R1,#UART0_S1_CLEAR_FLAGS
+        STRB R1,[R0,#UART0_S1_OFFSET]
+        MOVS R1, \
+        	#UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
+        STRB R1,[R0,#UART0_S2_OFFSET] 
+;Enable UART0 receiver and transmitter
+        MOVS R1,#UART0_C2_T_R
+        STRB R1,[R0,#UART0_C2_OFFSET] 
+;Restore original register values
+	POP {R0,R1,R2}
+	BX LR
+
+;-------------
+
+GetChar
+
+;Store initial values of R0, R1, and R2
+	PUSH {R1, R2, R3} 
+;Poll RDRF until UART0 ready to receive 
+	LDR R1, =UART0_BASE
+	MOVS R2, #UART0_S1_RDRF_MASK
+PollRx
+	LDRB R3, [R1, #UART0_S1_OFFSET]
+	ANDS R3, R3, R2
+	BEQ PollRx
+;Receive character and store in R1
+	LDRB R0, [R1, #UART0_D_OFFSET]
+	BX LR
+
+;--------------
+
+PutChar
+;Store initial values of R0, R1, and R2
+	PUSH {R1, R2, R3} 
+;Poll TDRE Until UART0 is ready for transmit
+	LDR R1, =UART0_BASE
+	MOVS R2, #UART0_S1_TDRE_MASK
+	
+PollTx
+	LDRB R3, [R1, #UART0_S1_OFFSET]
+	ANDS R3, R3, R2
+	BEQ PollTx
+;Transmit Character Stored in R0
+	STRB R0, [R1, #UART0_D_OFFSET]
+;Restore original register values
+	POP {R1, R2, R3}	
+	BX LR
