@@ -1,0 +1,69 @@
+void Init_DAC0() {
+		/* Enable TPM0 module clock */ 
+		SIM->SCGC6 |= SIM_SCGC6_DAC0_MASK; 
+		/* Enable port E module clock */ 
+		SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; 
+		/* Connect DAC0_OUT to Port E Pin 30 (J4 Pin 11) */ 
+		PORTE->PCR[30] = SET_PTE30_DAC0_OUT; 
+		/* Set DAC0 DMA disabled and buffer disabled */ 
+		DAC0->C1 = DAC_C1_BUFFER_DISABLED; 
+		/* Set DAC0 enabled with VDDA as reference voltage */
+		/* and read pointer interrupts disabled             */
+		DAC0->C0 = DAC_C0_ENABLE; 
+		/* Set DAC0 output voltage at minimum value */ 
+		DAC0->DAT[0].DATL = DAC_DATH_MIN; 
+		DAC0->DAT[0].DATH = DAC_DATL_MIN;
+}		
+
+Init_and_Cal_ADC0() {
+		/* Enable ADC0 module clock */ 
+		SIM->SCGC6 |= SIM_SCGC6_ADC0_MASK; 
+		/* Set ADC0 power and timing */ 
+		ADC0->CFG1 = ADC0_CFG1_LP_LONG_SGL10_3MHZ; 
+		/* Select channel A and set timing */ 
+		ADC0->CFG2 = ADC0_CFG2_CHAN_A_NORMAL_LONG; 
+		/* Select SW trigger and VDDA reference */ 
+		ADC0->SC2 = ADC0_SC2_SWTRIG_VDDA; 
+		/* Start calibration */ 
+		do {      
+			ADC0->SC3 = ADC0_SC3_CAL;      
+			/* Wait for calibration to complete */      
+			while (ADC0->SC3 & ADC_SC3_CAL_MASK);      
+			/* Check for calibration failure */ 
+		} while (ADC0->SC3 & ADC_SC3_CALF_MASK) 
+		/* Compute and store plus-side calibration value */ 
+		ADC0->PG =(((Int16) ADC0->CLPS + (Int16) ADC0->CLP4 +               
+					(Int16) ADC0->CLP3 + (Int16) ADC0->CLP2 +               
+					(Int16) ADC0->CLP1 + (Int16) ADC0->CLP0               
+					) >> 1) | (Int16) 0x8000; 
+		/* Compute and store minus-side calibration value */ 
+		ADC0->MG =(((Int16) ADC0->CLMS + (Int16) ADC0->CLM4 +               
+					(Int16) ADC0->CLM3 + (Int16) ADC0->CLM2 +               
+					(Int16) ADC0->CLM1 + (Int16) ADC0->CLM0               
+					) >> 1) | (Int16) 0x8000; 
+		/* Select single conversion */ 
+		ADC0->SC3 = ADC0_SC3_SINGLE; 
+}
+
+Init_TPM0() {
+		/* Enable TPM0 module clock */ 
+		SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; 
+		/* Enable port E module clock */ 
+		SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; 
+		/* Connect TPM0 channel 4 to port E pin 31 */ 
+		PORTE->PCR[31] = SET_PTE31_TPM0_CH4; 
+		/* Set TPM clock source */ 
+		SIM->SOPT2 &= ~SIM_SOPT_TPMSRC_MASK; 
+		SIM->SOPT2 |= SIM_SOPT2_TPM_MCGPLLCLK_DIV2; 
+		/* Set TPM0 configuration register to default values */ 
+		TPM0->CONF = TPM_CONF_DEFAULT; 
+		/* Set TPM0 counter modulo value */ 
+		TPM0->CNT = TPM_CNT_INIT; 
+		TPM0->MOD = TPM_MOD_PWM_PERIOD_20ms; 
+		/* Set TPM0 channel 4 edge-aligned PWM */ 
+		TPM0->CONTROLS[4].CnSC = TPM_CnSC_PWMH; 
+		/* Set TPM0 channel 4 value */ 
+		TPM0->CONTROLS[4].CnV = TPM_CnV_PWM_DUTY_2ms; 
+		/* Set TPM0 counter clock configuration */ 
+		TPM0->SC = TPM_SC_CLK_DIV16; 
+}

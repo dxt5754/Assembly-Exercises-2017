@@ -1,0 +1,54 @@
+//Dean Trivisani
+//Lab 12 Prelab
+
+//Part 1 (in C)
+//returns a random number from 0 to 3 inclusive
+//where timeVal is the value of a PIT timer count with 10ms intervals.
+//The modulo of this pseudo-random number is then taken
+//which always produces a value between 0 and 3 inclusive
+
+int	getRand(int timeVal) {
+	return timeVal % 4;
+}
+
+
+;Part 2 (in Assembly)
+;checks to see if a key has been pressed
+;by looking at the RDRF bit in UART0.
+;if a key has been pressed, the receive register
+;will be populated, and will otherwise be zero.
+;If a key has been pressed, returns 1 in R0
+;if a key hasnt been pressed, returns 0 in R0
+
+KEYPRESSED
+	LDR		R0, =ReceiveQueueRecord
+	LDRB	R0, [R0,#NUM_ENQD]
+	BX		LR
+	
+//Part 3 (in C)
+//computes score based on if the correct key was pressed
+//if user runs out of time or is wrong, they lose a point
+//if they get either one right when two colors are shown, they get a point
+//if they get both right when green and red are shown, they get two points
+//will implement different round scoring later, no prelab extra credit :(
+
+#define BLANK 	0
+#define	GREEN 	1
+#define	RED		2
+#define RANDG	3
+
+
+int computeScore(char color, char key) {
+	if(color == RANDG){
+		if(key=='r' || key == 'g') {
+			return 1;
+		}
+	} else if(color == BLANK && key == ' '){
+		return 1;
+	} else if ((color == GREEN && key =='g') || (color == RED && key == 'r')){
+		return 2;
+	}
+	
+	return 0;
+}
+			
