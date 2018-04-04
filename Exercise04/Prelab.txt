@@ -1,0 +1,27 @@
+Dean Trivisani 9/19/17
+
+DIVU
+			PUSH {R2,R3}		; store values of R2 and R3//////
+			CMP R0, #0			;compare divisor to 0/////
+			BEQ	SET_CAR			;if divisor is 0, go to SET_CAR//////
+			B BRK 
+SET_CAR
+			MSR APSR_nzcvq, #0  ;set flags to 0
+			B END
+BRK		
+			MOVS R2, #0 		; Move beginning quotient to R2
+			
+DIVWHILE			
+			CMP R1, R0			; compare R1 and R0
+			BLO ENDDIVWHILE		;if R1>R0 BRANCH//////////////
+			SUBS R1, R1, R0 	; R1 = R1 - R0///////
+			ADDS R2, R2, #1 	; quotient += 1//////////
+			B DIVWHILE
+			
+ENDDIVWHILE
+			MOVS R0, R2			;R0 <- quotient, remainder = R1
+			MSR APSR_nzcvq, #0x20000000	;Set carry flag to 1
+			
+END		
+			POP {R2, R3}		;set regs to previous values
+			BX LR 				;quit subroutine
