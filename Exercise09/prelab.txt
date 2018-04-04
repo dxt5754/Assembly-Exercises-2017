@@ -1,0 +1,176 @@
+GetChar
+;Dequeues a character from the receive queue, and returns it in R0.
+	PUSH {R1, R2, LR} 		;preserve reg values
+	LDR R1,=RxQueueRecord	;load queue record address into R1
+
+GETCHARLOOP
+	CPSID I					;Mask interrupts
+	BL DeQueue				;dequeue character from receive queue
+	CPSIE I					;enable interrupts
+	BCS GETCHARLOOP
+	POP {R1, R2, PC}
+
+PutChar
+;Enqueues the character from R0 to the transmit queue.
+	PUSH {R0, R1, LR}		
+PUTCHARLOOP
+	LDR R1,=TxQueueRecord
+	CPSID I					;Mask interrupts
+	BL	Enqueue				;Enqueue char from R0 to transmit queue
+	CPSIE I					;enable interrupts
+	BCS PUTCHARLOOP
+    MOVS R1,#UART0_C2_TI_RI	;Enable UART0 Transmitter, reciever, and rx interrupt
+	LDR R0, =UART0_BASE
+    STRB R1,[R0,#UART0_C2_OFFSET]
+	POP {R0, R1, PC}		;restore register values
+	
+	
+UART0_ISR
+;handles UART0 transmit and receive interrupts
+	CPSID I					;Mask  interrupts
+	PUSH {LR, R0-R3}		;preserve reg values
+	LDR R0, =UART0_BASE
+	LDRB R1,[R0,#UART0_C2_OFFSET]
+	MOVS R2, #0x80
+	ANDS R1, R1, R2
+	CMP R1, #0
+	BNE TXEN
+	B CHECKRX			;Icheck for rx interrupt
+TXEN
+	LDRB R1,[R0,#UART0_S1_OFFSET]
+	MOVS R2, #0x80
+	ANDS R1, R1, R2
+	CMP R1, #0
+	BEQ CHECKRX
+
+	LDR R1, =TxQueueRecord 	;Dequeue character
+	MOVS R2, #Q_BUF_SZ		;initialize queue
+	BL DeQueue
+	BCS TXDA				;dequeue failed
+	LDR R1, =UART0_BASE		;dequeue worked
+	STRB R0, [R1, #UART0_D_OFFSET]
+	B QUITISR
+TXDA
+	MOVS R1,#UART0_C2_T_RI
+    STRB R1,[R0,#UART0_C2_OFFSET]
+	B QUITISR
+CHECKRX
+	LDR R0, =UART0_BASE
+	LDRB R1,[R0,#UART0_S1_OFFSET]	;check for rx interrupt
+	MOVS R2, #0x10
+	ANDS R1, R1, R2
+	CMP R1, #0
+	BEQ QUITISR
+
+	LDR R0, =UART0_BASE
+	LDRB R3, [R0, #UART0_D_OFFSET]
+	LDR R1, =RxQueueRecord
+	MOVS R0, R3
+	BL EnQueue				;enqueue character
+QUITISR
+	CPSIE I
+	POP {R0-R3, PC}
+	
+	
+;Vector Table Change
+	DCD    UART0_ISR
+	
+Init_UART0_IRQ
+	PUSH {R0, R1, R2, LR}
+	;Initalize rxQueue
+	LDR R1, =RxQueueRecord
+	LDR R0, =RxQueue
+	MOVS R2, #Q_BUF_SZ
+	BL InitQueue
+	LDR R1, =TxQueueRecord
+	LDR R0, =TxQueue
+	MOVS R2, #Q_BUF_SZ
+	BL InitQueue
+    ;Select MCGPLLCLK / 2 as UART0 clock source
+     LDR R0,=SIM_SOPT2
+     LDR R1,=SIM_SOPT2_UART0SRC_MASK
+     LDR R2,[R0,#0]
+     BICS R2,R2,R1
+     LDR R1,=SIM_SOPT2_UART0_MCGPLLCLK_DIV2
+     ORRS R2,R2,R1
+     STR R2,[R0,#0]
+    ;Enable external connection for UART0
+     LDR R0,=SIM_SOPT5
+     LDR R1,= SIM_SOPT5_UART0_EXTERN_MASK_CLEAR
+     LDR R2,[R0,#0]
+     BICS R2,R2,R1
+     STR R2,[R0,#0]
+    ;Enable clock for UART0 module
+     LDR R0,=SIM_SCGC4
+     LDR R1,= SIM_SCGC4_UART0_MASK
+     LDR R2,[R0,#0]
+     ORRS R2,R2,R1
+     STR R2,[R0,#0]
+    ;Enable clock for Port A module
+     LDR R0,=SIM_SCGC5
+     LDR R1,= SIM_SCGC5_PORTA_MASK
+     LDR R2,[R0,#0]
+     ORRS R2,R2,R1
+     STR R2,[R0,#0]
+    ;Connect PORT A Pin 1 (PTA1) to UART0 Rx (J1 Pin 02)
+     LDR R0,=PORTA_PCR1
+     LDR R1,=PORT_PCR_SET_PTA1_UART0_RX
+     STR R1,[R0,#0]
+    ;Connect PORT A Pin 2 (PTA2) to UART0 Tx (J1 Pin 04)
+     LDR R0,=PORTA_PCR2
+     LDR R1,=PORT_PCR_SET_PTA2_UART0_TX
+     STR R1,[R0,#0] 
+     ;Disable UART0 receiver and transmitter
+     LDR R0,=UART0_BASE
+     MOVS R1,#UART0_C2_T_R
+     LDRB R2,[R0,#UART0_C2_OFFSET]
+     BICS R2,R2,R1
+     STRB R2,[R0,#UART0_C2_OFFSET]
+     ;Init NVIC for UART0 Interrupts
+     ;Set UART0 IRQ Priority
+     LDR R0, =UART0_IPR
+	 LDR R1, =NVIC_IPR_UART0_MASK
+     LDR R2, =NVIC_IPR_UART0_PRI_3
+     LDR R3, [R0, #0]
+	 BICS R3, R3, R1
+     ORRS R3, R3, R2
+     STR R3, [R0, #0]
+     ;Clear any pending UART0 Interrupts
+     LDR R0, =NVIC_ICPR
+     LDR R1, =NVIC_ICPR_UART0_MASK
+     STR R1, [R0, #0]
+     ;Unmask UART0 interrupts
+     LDR R0, =NVIC_ISER
+     LDR R1, =NVIC_ISER_UART0_MASK
+     STR R1, [R0, #0]
+	 ;Init UART0 for 8N1 format at 9600 Baud,
+	 ;and enable the rx interrupt
+	 LDR R0, =UART0_BASE
+	 MOVS R1,#UART0_BDH_9600
+     STRB R1,[R0,#UART0_BDH_OFFSET]
+     MOVS R1,#UART0_BDL_9600
+     STRB R1,[R0,#UART0_BDL_OFFSET]
+     MOVS R1,#UART0_C1_8N1
+     STRB R1,[R0,#UART0_C1_OFFSET]
+     MOVS R1,#UART0_C3_NO_TXINV
+     STRB R1,[R0,#UART0_C3_OFFSET]
+     MOVS R1,#UART0_C4_NO_MATCH_OSR_16
+     STRB R1,[R0,#UART0_C4_OFFSET]
+     MOVS R1,#UART0_C5_NO_DMA_SSR_SYNC
+     STRB R1,[R0,#UART0_C5_OFFSET]
+     MOVS R1,#UART0_S1_CLEAR_FLAGS
+     STRB R1,[R0,#UART0_S1_OFFSET]
+     MOVS R1, \
+     #UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
+     STRB R1,[R0,#UART0_S2_OFFSET] 
+	 ;Enable UART0 Transmitter, reciever, and rx interrupt
+	 MOVS R1,#UART0_C2_T_RI
+     STRB R1,[R0,#UART0_C2_OFFSET] 
+   	 ;Pop prevous R0-2 values off the stack.
+	 POP {R0, R1, R2, PC}
+
+
+
+
+
+

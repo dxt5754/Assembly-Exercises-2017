@@ -1,0 +1,69 @@
+Dean Trivisani
+11/6/2017
+	
+Init_PIT_IRQ
+;Init_PIT_IRQ: Initalize the PIT to generate an 
+;interrupt every 0.01 seconds from channel 0 
+
+			CPSID I
+			
+			PUSH {R0-R2, LR}
+			
+			LDR R0, =SIM_SCGC6
+			LDR R1, =SIM_SCGC6_PIT_MASK
+			LDR R2, [R0, #0]				;current SIM_SCGC6 value
+			ORRS R2, R2, R1					;only PIT bit set
+			STR R2, [R0, #0]				;update SIM_SCGC6
+			LDR R0, =PIT_BASE				;Enable PIT timer module
+			LDR R1, =PIT_MCR_EN_FRZ			
+			STR R1, [R0, #PIT_MCR_OFFSET]
+			LDR R0, =PIT_CH0_BASE			
+			LDR R1, =PIT_LDVAL_10ms 
+			STR R1, [R0, #PIT_LDVAL_OFFSET]
+			LDR R0, =PIT_CH0_BASE			;Enable PIT timer channel 0 for interrupts
+			LDR R1, =PIT_TCTRL_TEN_MASK
+			LDR R2, [R0, #PIT_TCTRL_OFFSET]
+			BICS R2, R2, R1
+			STR R2, [R0, #PIT_TCTRL_OFFSET]
+			LDR R0, =PIT_CH0_BASE			;Enable PIT timer channel 0 for interrupts
+			MOVS R1, #PIT_TCTRL_CH_IE
+			STR R1, [R0, #PIT_TCTRL_OFFSET]
+			;Unmask PIT Interrupts
+			LDR R0, =NVIC_ISER
+			LDR R1, =PIT_IRQ_MASK
+			STR R1, [R0, #0]
+			;Set PIT Interrupt Priority
+			LDR R0, =PIT_IPR
+			LDR R1, =(PIT_IRQ_PRI << PIT_PRI_POS)
+			STR R1, [R0, #0]
+			
+			CPSIE I
+			
+			POP {R0-R2, PC}
+			
+PIT_ISR
+;On a PIT interrupt, if the (byte) variable RunStopWatch
+;is not equal to zero, the (word) variable Count is incremented
+;otherwise, it leaves Count unchanged. 
+;Interrupt condition is then cleard
+
+			LDR R0, =RunStopWatch
+			LDRB R0, [R0, #0]
+			CMP R0, #0
+			BNE PITISRINCR
+			B QUITPITISR
+PITISRINCR
+			LDR R0, =Count					;increment count if stopwatch is running	
+			LDR R1, [R0, #0]
+			ADDS R1, R1, #1
+			STR R1, [R0, #0]
+QUITPITISR
+			LDR R0, =PIT_CH0_BASE			;clear interrupt condition
+			LDR R1, =PIT_TFLG_TIF_MASK
+			STR R1, [R0, #PIT_TFLG_OFFSET]
+			BX LR
+			
+			
+;VECTOR TABLE CHANGE
+ DCD    PIT_ISR      	  					;38:PIT (all IRQ sources)
+ 
