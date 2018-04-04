@@ -1,0 +1,1438 @@
+
+
+
+ARM Macro Assembler    Page 1 Circular FIFO Queue Operations
+
+
+    1 00000000                 TTL              Circular FIFO Queue Operations
+    2 00000000         ;*******************************************************
+                       *********
+    3 00000000         ;Uses a menu and text interface to 
+    4 00000000         ;test a Circular FIFO queue's operations
+    5 00000000         ;Name:  Dean Trivisani
+    6 00000000         ;Date:  10/17/2017
+    7 00000000         ;Class:  CMPE-250
+    8 00000000         ;Section:  01L5
+    9 00000000         ;-------------------------------------------------------
+                       --------
+   10 00000000         ;Keil Template for KL46
+   11 00000000         ;R. W. Melton
+   12 00000000         ;September 25, 2017
+   13 00000000         ;*******************************************************
+                       *********
+   14 00000000         ;Assembler directives
+   15 00000000                 THUMB
+   17 00000000         ;*******************************************************
+                       *********
+   18 00000000         ;Include files
+   19 00000000                 GET              MKL46Z4.s   ;Included by start.
+                                                            s
+   21 00000000         ;*******************************************************
+                       *********
+   22 00000000         ;EQUates
+   23 00000000         
+   24 00000000         ;-------------------------------------------------------
+                       --------
+   25 00000000         ;PORTx_PCRn (Port x pin control register n [for pin n])
+   26 00000000         ;___->10-08:Pin mux control (select 0 to 8)
+   27 00000000         ;Use provided PORT_PCR_MUX_SELECT_2_MASK
+   28 00000000         ;-------------------------------------------------------
+                       --------
+   29 00000000         ;Port A
+   31 00000000 01000200 
+                       PORT_PCR_SET_PTA1_UART0_RX
+                               EQU              (PORT_PCR_ISF_MASK :OR:       
+                             PORT_PCR_MUX_SELECT_2_MASK)
+   33 00000000 01000200 
+                       PORT_PCR_SET_PTA2_UART0_TX
+                               EQU              (PORT_PCR_ISF_MASK :OR:       
+                             PORT_PCR_MUX_SELECT_2_MASK)
+   34 00000000         ;-------------------------------------------------------
+                       --------
+   35 00000000         ;SIM_SCGC4
+   36 00000000         ;1->10:UART0 clock gate control (enabled)
+   37 00000000         ;Use provided SIM_SCGC4_UART0_MASK
+   38 00000000         ;-------------------------------------------------------
+                       --------
+   39 00000000         ;SIM_SCGC5
+   40 00000000         ;1->09:Port A clock gate control (enabled)
+   41 00000000         ;Use provided SIM_SCGC5_PORTA_MASK
+   42 00000000         ;-------------------------------------------------------
+                       --------
+   43 00000000         ;SIM_SOPT2
+   44 00000000         ;01=27-26:UART0SRC=UART0 clock source select
+   45 00000000         ;         (PLLFLLSEL determines MCGFLLCLK' or MCGPLLCLK/
+                       2)
+
+
+
+ARM Macro Assembler    Page 2 Circular FIFO Queue Operations
+
+
+   46 00000000         ; 1=   16:PLLFLLSEL=PLL/FLL clock select (MCGPLLCLK/2)
+   48 00000000 04000000 
+                       SIM_SOPT2_UART0SRC_MCGPLLCLK
+                               EQU              (1 << SIM_SOPT2_UART0SRC_SHIFT)
+   50 00000000 04010000 
+                       SIM_SOPT2_UART0_MCGPLLCLK_DIV2
+                               EQU              (SIM_SOPT2_UART0SRC_MCGPLLCLK :
+OR: SIM_SOPT2_PLLFLLSEL_MASK)
+   51 00000000         ;-------------------------------------------------------
+                       --------
+   52 00000000         ;SIM_SOPT5
+   53 00000000         ; 0->   16:UART0 open drain enable (disabled)
+   54 00000000         ; 0->   02:UART0 receive data select (UART0_RX)
+   55 00000000         ;00->01-00:UART0 transmit data select source (UART0_TX)
+   59 00000000 00010007 
+                       SIM_SOPT5_UART0_EXTERN_MASK_CLEAR
+                               EQU              (SIM_SOPT5_UART0ODE_MASK :OR:  
+                                SIM_SOPT5_UART0RXSRC_MASK :OR:               
+                   SIM_SOPT5_UART0TXSRC_MASK)
+   60 00000000         ;-------------------------------------------------------
+                       --------
+   61 00000000         ;UART0_BDH
+   62 00000000         ;    0->  7:LIN break detect IE (disabled)
+   63 00000000         ;    0->  6:RxD input active edge IE (disabled)
+   64 00000000         ;    0->  5:Stop bit number select (1)
+   65 00000000         ;00001->4-0:SBR[12:0] (UART0CLK / [9600 * (OSR + 1)]) 
+   66 00000000         ;UART0CLK is MCGPLLCLK/2
+   67 00000000         ;MCGPLLCLK is 96 MHz
+   68 00000000         ;MCGPLLCLK/2 is 48 MHz
+   69 00000000         ;SBR = 48 MHz / (9600 * 16) = 312.5 --> 312 = 0x138
+   70 00000000 00000001 
+                       UART0_BDH_9600
+                               EQU              0x01
+   71 00000000         ;-------------------------------------------------------
+                       --------
+   72 00000000         ;UART0_BDL
+   73 00000000         ;0x38->7-0:SBR[7:0] (UART0CLK / [9600 * (OSR + 1)])
+   74 00000000         ;UART0CLK is MCGPLLCLK/2
+   75 00000000         ;MCGPLLCLK is 96 MHz
+   76 00000000         ;MCGPLLCLK/2 is 48 MHz
+   77 00000000         ;SBR = 48 MHz / (9600 * 16) = 312.5 --> 312 = 0x138
+   78 00000000 00000038 
+                       UART0_BDL_9600
+                               EQU              0x38
+   79 00000000         ;-------------------------------------------------------
+                       --------
+   80 00000000         ;UART0_C1
+   81 00000000         ;0-->7:LOOPS=loops select (normal)
+   82 00000000         ;0-->6:DOZEEN=doze enable (disabled)
+   83 00000000         ;0-->5:RSRC=receiver source select (internal--no effect 
+                       LOOPS=0)
+   84 00000000         ;0-->4:M=9- or 8-bit mode select 
+   85 00000000         ;        (1 start, 8 data [lsb first], 1 stop)
+   86 00000000         ;0-->3:WAKE=receiver wakeup method select (idle)
+   87 00000000         ;0-->2:IDLE=idle line type select (idle begins after sta
+                       rt bit)
+   88 00000000         ;0-->1:PE=parity enable (disabled)
+   89 00000000         ;0-->0:PT=parity type (even parity--no effect PE=0)
+   90 00000000 00000000 
+
+
+
+ARM Macro Assembler    Page 3 Circular FIFO Queue Operations
+
+
+                       UART0_C1_8N1
+                               EQU              0x00
+   91 00000000         ;-------------------------------------------------------
+                       --------
+   92 00000000         ;UART0_C2
+   93 00000000         ;0-->7:TIE=transmit IE for TDRE (disabled)
+   94 00000000         ;0-->6:TCIE=transmission complete IE for TC (disabled)
+   95 00000000         ;0-->5:RIE=receiver IE for RDRF (disabled)
+   96 00000000         ;0-->4:ILIE=idle line IE for IDLE (disabled)
+   97 00000000         ;1-->3:TE=transmitter enable (enabled)
+   98 00000000         ;1-->2:RE=receiver enable (enabled)
+   99 00000000         ;0-->1:RWU=receiver wakeup control (normal)
+  100 00000000         ;0-->0:SBK=send break (disabled, normal)
+  101 00000000 0000000C 
+                       UART0_C2_T_R
+                               EQU              (UART0_C2_TE_MASK :OR: UART0_C2
+_RE_MASK)
+  102 00000000         ;-------------------------------------------------------
+                       --------
+  103 00000000         ;UART0_C3
+  104 00000000         ;0-->7:R8T9=9th data bit for receiver (not used M=0)
+  105 00000000         ;           10th data bit for transmitter (not used M10=
+                       0)
+  106 00000000         ;0-->6:R9T8=9th data bit for transmitter (not used M=0)
+  107 00000000         ;           10th data bit for receiver (not used M10=0)
+  108 00000000         ;0-->5:TXDIR=UART_TX pin direction in single-wire mode
+  109 00000000         ;            (no effect LOOPS=0)
+  110 00000000         ;0-->4:TXINV=transmit data inversion (not inverted)
+  111 00000000         ;0-->3:ORIE=overrun IE for OR (disabled)
+  112 00000000         ;0-->2:NEIE=noise error IE for NF (disabled)
+  113 00000000         ;0-->1:FEIE=framing error IE for FE (disabled)
+  114 00000000         ;0-->0:PEIE=parity error IE for PF (disabled)
+  115 00000000 00000000 
+                       UART0_C3_NO_TXINV
+                               EQU              0x00
+  116 00000000         ;-------------------------------------------------------
+                       --------
+  117 00000000         ;UART0_C4
+  118 00000000         ;    0-->  7:MAEN1=match address mode enable 1 (disabled
+                       )
+  119 00000000         ;    0-->  6:MAEN2=match address mode enable 2 (disabled
+                       )
+  120 00000000         ;    0-->  5:M10=10-bit mode select (not selected)
+  121 00000000         ;01111-->4-0:OSR=over sampling ratio (16)
+  122 00000000         ;               = 1 + OSR for 3 <= OSR <= 31
+  123 00000000         ;               = 16 for 0 <= OSR <= 2 (invalid values)
+  124 00000000 0000000F 
+                       UART0_C4_OSR_16
+                               EQU              0x0F
+  125 00000000 0000000F 
+                       UART0_C4_NO_MATCH_OSR_16
+                               EQU              UART0_C4_OSR_16
+  126 00000000         ;-------------------------------------------------------
+                       --------
+  127 00000000         ;UART0_C5
+  128 00000000         ;  0-->  7:TDMAE=transmitter DMA enable (disabled)
+  129 00000000         ;  0-->  6:Reserved; read-only; always 0
+  130 00000000         ;  0-->  5:RDMAE=receiver full DMA enable (disabled)
+  131 00000000         ;000-->4-2:Reserved; read-only; always 0
+
+
+
+ARM Macro Assembler    Page 4 Circular FIFO Queue Operations
+
+
+  132 00000000         ;  0-->  1:BOTHEDGE=both edge sampling (rising edge only
+                       )
+  133 00000000         ;  0-->  0:RESYNCDIS=resynchronization disable (enabled)
+                       
+  134 00000000 00000000 
+                       UART0_C5_NO_DMA_SSR_SYNC
+                               EQU              0x00
+  135 00000000         ;-------------------------------------------------------
+                       --------
+  136 00000000         ;UART0_S1
+  137 00000000         ;0-->7:TDRE=transmit data register empty flag; read-only
+                       
+  138 00000000         ;0-->6:TC=transmission complete flag; read-only
+  139 00000000         ;0-->5:RDRF=receive data register full flag; read-only
+  140 00000000         ;1-->4:IDLE=idle line flag; write 1 to clear (clear)
+  141 00000000         ;1-->3:OR=receiver overrun flag; write 1 to clear (clear
+                       )
+  142 00000000         ;1-->2:NF=noise flag; write 1 to clear (clear)
+  143 00000000         ;1-->1:FE=framing error flag; write 1 to clear (clear)
+  144 00000000         ;1-->0:PF=parity error flag; write 1 to clear (clear)
+  145 00000000 0000001F 
+                       UART0_S1_CLEAR_FLAGS
+                               EQU              0x1F
+  146 00000000         ;-------------------------------------------------------
+                       --------
+  147 00000000         ;UART0_S2
+  148 00000000         ;1-->7:LBKDIF=LIN break detect interrupt flag (clear)
+  149 00000000         ;             write 1 to clear
+  150 00000000         ;1-->6:RXEDGIF=RxD pin active edge interrupt flag (clear
+                       )
+  151 00000000         ;              write 1 to clear
+  152 00000000         ;0-->5:(reserved); read-only; always 0
+  153 00000000         ;0-->4:RXINV=receive data inversion (disabled)
+  154 00000000         ;0-->3:RWUID=receive wake-up idle detect
+  155 00000000         ;0-->2:BRK13=break character generation length (10)
+  156 00000000         ;0-->1:LBKDE=LIN break detect enable (disabled)
+  157 00000000         ;0-->0:RAF=receiver active flag; read-only
+  158 00000000 000000C0 
+                       UART0_S2_NO_RXINV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
+                               EQU              0xC0
+  159 00000000         
+  160 00000000 0000004F 
+                       MAX_STRING
+                               EQU              79
+  161 00000000 000003E8 
+                       DIV1K   EQU              0x3E8
+  162 00000000 00002710 
+                       DIV10K  EQU              0x2710
+  163 00000000 000186A0 
+                       DIV100K EQU              0x186A0
+  164 00000000 000F4240 
+                       DIV1M   EQU              0xF4240
+  165 00000000 00000000 
+                       IN_PTR  EQU              0
+  166 00000000 00000004 
+                       OUT_PTR EQU              4
+  167 00000000 00000008 
+                       BUF_STRT
+                               EQU              8
+
+
+
+ARM Macro Assembler    Page 5 Circular FIFO Queue Operations
+
+
+  168 00000000 0000000C 
+                       BUF_PAST
+                               EQU              12
+  169 00000000 00000010 
+                       BUF_SIZE
+                               EQU              16
+  170 00000000 00000011 
+                       NUM_ENQD
+                               EQU              17
+  171 00000000 00000004 
+                       Q_BUF_SZ
+                               EQU              4
+  172 00000000 00000012 
+                       Q_REC_SZ
+                               EQU              18
+  173 00000000         
+  174 00000000         ;*******************************************************
+                       *********
+  175 00000000         ;Program
+  176 00000000         ;Linker requires Reset_Handler
+  177 00000000                 AREA             MyCode,CODE,READONLY
+  178 00000000                 ENTRY
+  179 00000000                 EXPORT           Reset_Handler
+  180 00000000                 EXPORT           PutChar
+  181 00000000                 IMPORT           Startup
+  182 00000000         Reset_Handler
+                               PROC             {},{}
+  183 00000000         main
+  184 00000000         ;-------------------------------------------------------
+                       --------
+  185 00000000         ;Mask interrupts
+  186 00000000 B672            CPSID            I
+  187 00000002         ;KL46 system startup with 48-MHz system clock
+  188 00000002 F7FF FFFE       BL               Startup
+  189 00000006         ;-------------------------------------------------------
+                       --------
+  190 00000006         ;>>>>> begin main program code <<<<<
+  191 00000006 F000 F98E       BL               Init_UART0_Polling ;Initialize 
+                                                            KL46 UART0  
+  192 0000000A F7FF FFFE       BL               InitQueue   ;initialize program
+                                                             queue record
+  193 0000000E         NEWQUEUE
+  194 0000000E B401            PUSH             {R0}        ;preserve register 
+                                                            value
+  195 00000010 48E9            LDR              R0,=Prompt  ;print text prompt
+  196 00000012 F7FF FFFE       BL               PutStringSB
+  197 00000016 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  198 00000018         INLOOP
+  199 00000018 B401            PUSH             {R0}        ;preserve register 
+                                                            value
+  200 0000001A F000 F9BA       BL               GetChar     ;store input in R0
+  201 0000001E 0005            MOVS             R5,R0       ;move it to a free 
+                                                            register
+  202 00000020 0006            MOVS             R6,R0       ;use R6 as temp sto
+                                                            rage for the char
+  203 00000022 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  204 00000024 2D61            CMP              R5,#'a'     ;Convert char to up
+
+
+
+ARM Macro Assembler    Page 6 Circular FIFO Queue Operations
+
+
+                                                            percase if not alre
+                                                            ady
+  205 00000026 D300            BLO              ISUPPER
+  206 00000028 3D20            SUBS             R5,R5,#' '
+  207 0000002A         ISUPPER
+  208 0000002A F000 F963       BL               PRINTCMD    ;print the characte
+                                                            r
+  209 0000002E F000 F959       BL               NEWLINE
+  210 00000032 2D44            CMP              R5,#'D'     ;do the specific th
+                                                            ing for each comman
+                                                            d
+  211 00000034 D008            BEQ              DQCMD
+  212 00000036 2D45            CMP              R5,#'E'
+  213 00000038 D01D            BEQ              EQCMD
+  214 0000003A 2D48            CMP              R5,#'H'
+  215 0000003C D036            BEQ              HLPCMD
+  216 0000003E 2D50            CMP              R5,#'P'
+  217 00000040 D03C            BEQ              PRNTCMD
+  218 00000042 2D53            CMP              R5,#'S'
+  219 00000044 D058            BEQ              STATCMD
+  220 00000046 E7E7            B                INLOOP      ;loop if it was not
+                                                             valid command
+  221 00000048         
+  222 00000048         DQCMD
+  223 00000048 B401            PUSH             {R0}        ;preserve register 
+                                                            values
+  224 0000004A F7FF FFFE       BL               Dequeue     ;dequeue 
+  225 0000004E D20E            BCS              DQFAIL      ;if C is set, deque
+                                                            ue was unsuccessful
+                                                            
+  226 00000050 F7FF FFFE       BL               PutChar     ;print dequeued cha
+                                                            r with some formatt
+                                                            ing
+  227 00000054 203A            MOVS             R0,#':'
+  228 00000056 F7FF FFFE       BL               PutChar
+  229 0000005A 2020            MOVS             R0,#' '
+  230 0000005C F7FF FFFE       BL               PutChar
+  231 00000060 E7FF            B                DQQUIT
+  232 00000062         DQQUIT
+  233 00000062 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  234 00000064 F000 F94B       BL               STATPRINT   ;print status
+  235 00000068 F000 F93C       BL               NEWLINE
+  236 0000006C E7CF            B                NEWQUEUE    ;go back to menu
+  237 0000006E         DQFAIL
+  238 0000006E 48D3            LDR              R0,=FailText 
+                                                            ;print failure text
+                                                            
+  239 00000070 F7FF FFFE       BL               PutStringSB
+  240 00000074 E7F5            B                DQQUIT
+  241 00000076         
+  242 00000076         EQCMD
+  243 00000076 B401            PUSH             {R0}        ;preserve register 
+                                                            values
+  244 00000078 48D1            LDR              R0,=EnqPrompt ;print enqueue pr
+                                                            ompt
+  245 0000007A F7FF FFFE       BL               PutStringSB
+  246 0000007E F000 F988       BL               GetChar     ;take input char
+  247 00000082 F7FF FFFE       BL               PutChar     ;print it
+
+
+
+ARM Macro Assembler    Page 7 Circular FIFO Queue Operations
+
+
+  248 00000086 F000 F92D       BL               NEWLINE
+  249 0000008A F7FF FFFE       BL               Enqueue     ;enqueue input char
+                                                            
+  250 0000008E D209            BCS              EQFAIL      ;if C is set, enque
+                                                            ue failed
+  251 00000090 48CC            LDR              R0,=SuccText 
+                                                            ;print success text
+                                                            
+  252 00000092 F7FF FFFE       BL               PutStringSB
+  253 00000096 E7FF            B                EQQUIT
+  254 00000098         EQQUIT
+  255 00000098 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  256 0000009A F000 F930       BL               STATPRINT   ;print status  
+  257 0000009E F000 F921       BL               NEWLINE
+  258 000000A2 E7B4            B                NEWQUEUE    ;back to menu
+  259 000000A4         EQFAIL
+  260 000000A4 48C5            LDR              R0,=FailText 
+                                                            ;print failure text
+                                                            
+  261 000000A6 F7FF FFFE       BL               PutStringSB
+  262 000000AA E7F5            B                EQQUIT
+  263 000000AC         
+  264 000000AC         HLPCMD
+  265 000000AC B401            PUSH             {R0}        ;preserve register 
+                                                            value
+  266 000000AE 48C6            LDR              R0,=HelpText ;print help text
+  267 000000B0 F7FF FFFE       BL               PutStringSB
+  268 000000B4 F000 F916       BL               NEWLINE
+  269 000000B8 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  270 000000BA E7A8            B                NEWQUEUE    ;back to menu   
+  271 000000BC         
+  272 000000BC         PRNTCMD
+  273 000000BC B401            PUSH             {R0}        ;preserve register 
+                                                            value
+  274 000000BE 203E            MOVS             R0,#'>'     ;print ">"
+  275 000000C0 F7FF FFFE       BL               PutChar
+  276 000000C4 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  277 000000C6 B479            PUSH             {R0,R3,R4,R5,R6} ;preserve regi
+                                                            ster values
+  278 000000C8 7C4B            LDRB             R3,[R1,#NUM_ENQD] ;load # enque
+                                                            ued to R3          
+                                                            
+  279 000000CA 684C            LDR              R4,[R1,#OUT_PTR] ;load out poin
+                                                            ter to R4
+  280 000000CC 68CD            LDR              R5,[R1,#BUF_PAST] ;load buffer 
+                                                            past to R5
+  281 000000CE 2600            MOVS             R6,#0       ;clear R6
+  282 000000D0         PRNTLOOP
+  283 000000D0 429E            CMP              R6,R3       ;quit if all chars 
+                                                            were printed
+  284 000000D2 D008            BEQ              PRNTQUIT
+  285 000000D4 7820            LDRB             R0,[R4,#0]  ;print char at out 
+                                                            pointer
+  286 000000D6 F7FF FFFE       BL               PutChar
+  287 000000DA 1C64            ADDS             R4,R4,#1    ;out pointer += 1  
+                                                                    
+
+
+
+ARM Macro Assembler    Page 8 Circular FIFO Queue Operations
+
+
+  288 000000DC 1C76            ADDS             R6,R6,#1    ;counter += 1
+  289 000000DE 42A5            CMP              R5, R4      ;loop if out pointe
+                                                            r is less than buff
+                                                            er end
+  290 000000E0 D8F6            BHI              PRNTLOOP
+  291 000000E2 688C            LDR              R4,[R1,#BUF_STRT] 
+                                                            ;reset out pointer
+  292 000000E4 E7F4            B                PRNTLOOP    ;loop
+  293 000000E6         PRNTQUIT
+  294 000000E6 BC79            POP              {R0,R3,R4,R5,R6} ;restore regis
+                                                            ter values
+  295 000000E8 B401            PUSH             {R0}        ;preserve register 
+                                                            value
+  296 000000EA 203C            MOVS             R0,#'<'     ;print "<"
+  297 000000EC F7FF FFFE       BL               PutChar
+  298 000000F0 BC01            POP              {R0}        ;restore register v
+                                                            alue
+  299 000000F2 F000 F8F7       BL               NEWLINE
+  300 000000F6 E78A            B                NEWQUEUE    ;go back to menu
+  301 000000F8         
+  302 000000F8         STATCMD
+  303 000000F8 B401            PUSH             {R0}        ;preserve register 
+                                                            values
+  304 000000FA 48B4            LDR              R0,=StatText ;print status text
+                                                            
+  305 000000FC F7FF FFFE       BL               PutStringSB
+  306 00000100 BC01            POP              {R0}        ;restore register v
+                                                            alues
+  307 00000102 F000 F8FC       BL               STATPRINT   ;print queue status
+                                                            
+  308 00000106 F000 F8ED       BL               NEWLINE
+  309 0000010A E780            B                NEWQUEUE    ;go back to menu
+  310 0000010C         ;>>>>>   end main program code <<<<<
+  311 0000010C         ;Stay here
+  312 0000010C                 ENDP
+  313 0000010C E7FE            B                .
+  314 0000010E         ;>>>>> begin subroutine code <<<<<
+  315 0000010E         InitQueue
+                               PROC             {R0-R14},{}
+  316 0000010E         ;Initializes the queue record structure at the 
+  317 0000010E         ;address in R1 for the empty queue buffer at 
+  318 0000010E         ;the address in R0 of size, 
+  319 0000010E         ;(i.e., character capacity), given in R2.
+  320 0000010E         ;Calls:
+  321 0000010E         ;Input: R0, R1, R2
+  322 0000010E         ;Output:  
+  323 0000010E         ;Register Modiciations:
+  324 0000010E B508            PUSH             {R3,LR}     ;preserve register 
+                                                            values
+  325 00000110 48AF            LDR              R0,=QBuffer
+  326 00000112 49B0            LDR              R1,=QRecord
+  327 00000114 6008            STR              R0,[R1,#IN_PTR] ;sets the queue
+                                                             buffer address to 
+                                                            InPointer
+  328 00000116 6048            STR              R0,[R1,#OUT_PTR] ;"    " "    "
+                                                                "    " OutPoint
+                                                            er
+  329 00000118 6088            STR              R0,[R1,#BUF_STRT] ;sets the buf
+                                                            fer start address t
+
+
+
+ARM Macro Assembler    Page 9 Circular FIFO Queue Operations
+
+
+                                                            o the queue buffer 
+                                                            address
+  330 0000011A 2204            MOVS             R2,#Q_BUF_SZ
+  331 0000011C 1883            ADDS             R3,R0,R2    ;adds the buffer si
+                                                            ze to the buffer st
+                                                            arting address
+  332 0000011E 60CB            STR              R3,[R1,#BUF_PAST] ;store this n
+                                                            ew address
+  333 00000120 740A            STRB             R2,[R1,#BUF_SIZE] ;set the buff
+                                                            er size to 4
+  334 00000122 2300            MOVS             R3,#0       ;clear R3
+  335 00000124 744B            STRB             R3,[R1,#NUM_ENQD] ;clear enqueu
+                                                            ed number
+  336 00000126 BD08            POP              {R3,PC}     ;restore register v
+                                                            alues
+  337 00000128         
+  338 00000128                 ENDP
+  339 00000128         
+  340 00000128         
+  341 00000128         Dequeue PROC             {R0-R14},{}
+  342 00000128         ;Attempts to get a character from the queue 
+  343 00000128         ;whose record structure’s address is in R1:  
+  344 00000128         ;if the queue is not empty, dequeues a single
+  345 00000128         ; character from the queue to R0, and returns 
+  346 00000128         ;with the PSRC bit cleared, (i.e., 0), to report 
+  347 00000128         ;dequeue success; otherwise, returns with the 
+  348 00000128         ;PSRC bit set, (i.e., 1) to report dequeue failure.
+  349 00000128         ;Inputs: R1
+  350 00000128         ;Outputs: R0, C
+  351 00000128 B41E            PUSH             {R1, R2, R3, R4}
+  352 0000012A 7C4B            LDRB             R3, [R1, #NUM_ENQD] ;set flag i
+                                                            f no queued
+  353 0000012C 2B00            CMP              R3, #0
+  354 0000012E D014            BEQ              INVALID
+  355 00000130 6848            LDR              R0, [R1, #OUT_PTR] ;R0 <- value
+                                                            
+  356 00000132 7800            LDRB             R0, [R0, #0]
+  357 00000134 7C4B            LDRB             R3, [R1, #NUM_ENQD] 
+                                                            ;NumEnqueued -=1
+  358 00000136 1E5B            SUBS             R3, R3, #1
+  359 00000138 744B            STRB             R3, [R1, #NUM_ENQD]
+  360 0000013A 684B            LDR              R3, [R1, #OUT_PTR] 
+                                                            ;OutPointer +=1
+  361 0000013C 1C5B            ADDS             R3, R3, #1
+  362 0000013E 604B            STR              R3, [R1, #OUT_PTR]
+  363 00000140 68CC            LDR              R4, [R1, #BUF_PAST] ;if OutPoin
+                                                            ter >= BufferPast, 
+                                                            wrap,
+  364 00000142 42A3            CMP              R3, R4
+  365 00000144 D301            BLO              CLEARC
+  366 00000146 688B            LDR              R3, [R1, #BUF_STRT] ;OutPointer
+                                                             = BufferStart
+  367 00000148 604B            STR              R3, [R1, #OUT_PTR] ;wrap 
+  368 0000014A         CLEARC
+  369 0000014A F3EF 8100       MRS              R1, APSR    ;clears C
+  370 0000014E 2320            MOVS             R3, #0x20
+  371 00000150 0609            LSLS             R1, R1, #24
+  372 00000152 4399            BICS             R1, R1, R3
+  373 00000154 F381 8800       MSR              APSR, R1
+
+
+
+ARM Macro Assembler    Page 10 Circular FIFO Queue Operations
+
+
+  374 00000158 E006            B                DQQUITT     ;quit
+  375 0000015A         INVALID
+  376 0000015A F3EF 8100       MRS              R1, APSR    ;set C
+  377 0000015E 2320            MOVS             R3, #0x20
+  378 00000160 061B            LSLS             R3, R3, #24
+  379 00000162 4319            ORRS             R1, R1, R3
+  380 00000164 F381 8800       MSR              APSR, R1
+  381 00000168         
+  382 00000168         DQQUITT
+  383 00000168 BC1E            POP              {R1, R2, R3, R4} ;restore regis
+                                                            ter values
+  384 0000016A 4770            BX               LR          ;exit subroutine
+  385 0000016C         
+  386 0000016C                 ENDP
+  387 0000016C         
+  388 0000016C         Enqueue PROC             {R0-R14},{}
+  389 0000016C         ;Attempts to put a character in the queue
+  390 0000016C         ; whose queue record structure’s address
+  391 0000016C         ; is in R1—if the queue is not full, enqueues
+  392 0000016C         ; the single character from R0 to the queue, 
+  393 0000016C         ;and returns with the PSRC cleared to 
+  394 0000016C         ;report enqueue success; otherwise, returns 
+  395 0000016C         ;with the PSRC bit set to report enqueue failure.
+  396 0000016C         ;Calls:
+  397 0000016C         ;Input: R0,R1
+  398 0000016C         ;Output: PSR C flag flag (0 = success, 1 = failure)
+  399 0000016C         ;Register Modiciations: No registers, PSR
+  400 0000016C B478            PUSH             {R3-R6}     ;preserve register 
+                                                            values
+  401 0000016E 7C4B            LDRB             R3,[R1,#NUM_ENQD] 
+                                                            ;R3 <- NumEnqueued
+  402 00000170 7C0C            LDRB             R4,[R1,#BUF_SIZE] 
+                                                            ;R4 <- BufferSize
+  403 00000172 42A3            CMP              R3,R4       ;if value >= buffer
+                                                             size, go to carry
+  404 00000174 D211            BHS              CARRY
+  405 00000176 680D            LDR              R5,[R1,#IN_PTR] 
+                                                            ;R5 <- InPointer
+  406 00000178 68CE            LDR              R6,[R1,#BUF_PAST] 
+                                                            ;R6 <- BufferPast
+  407 0000017A 7028            STRB             R0,[R5,#0]  ;store value at InP
+                                                            ointer
+  408 0000017C 1C5B            ADDS             R3,R3,#1    ;NumEnqueued += 1
+  409 0000017E 744B            STRB             R3,[R1,#NUM_ENQD] 
+                                                            ;R3 <- NumEnqueued
+  410 00000180 1C6D            ADDS             R5,R5,#1    ;InPointer += 1
+  411 00000182 42B5            CMP              R5,R6       ;if Inpointer < Buf
+                                                            ferPast, skip reset
+                                                            
+  412 00000184 D300            BLO              SKIP
+  413 00000186 688D            LDR              R5,[R1,#BUF_STRT] 
+                                                            ;reset InPointer
+  414 00000188         SKIP
+  415 00000188 600D            STR              R5,[R1,#IN_PTR] 
+                                                            ;Inpointer <- R1
+  416 0000018A F3EF 8300       MRS              R3,APSR     ;R3 <- APSR
+  417 0000018E 2420            MOVS             R4,#0x20    ;R4 <- #0x20, for l
+                                                            ogic
+  418 00000190 0624            LSLS             R4,R4,#24   ;shift to MSB
+
+
+
+ARM Macro Assembler    Page 11 Circular FIFO Queue Operations
+
+
+  419 00000192 43A3            BICS             R3,R3,R4    ;clear C
+  420 00000194 F383 8800       MSR              APSR,R3
+  421 00000198 E006            B                EQQUITT     ;quit
+  422 0000019A         CARRY
+  423 0000019A F3EF 8300       MRS              R3,APSR     ;set C
+  424 0000019E 2420            MOVS             R4,#0x20
+  425 000001A0 0624            LSLS             R4,R4,#24
+  426 000001A2 4323            ORRS             R3,R3,R4
+  427 000001A4 F383 8800       MSR              APSR,R3
+  428 000001A8         EQQUITT
+  429 000001A8 BC78            POP              {R3-R6}     ;restore register v
+                                                            alues 
+  430 000001AA 4770            BX               LR          ;exit subroutine
+  431 000001AC         
+  432 000001AC                 ENDP
+  433 000001AC         
+  434 000001AC         PutNumHex
+                               PROC             {R0-R14},{}
+  435 000001AC         ;Prints to the terminal screen the text
+  436 000001AC         ; hexadecimal representation of the unsigned
+  437 000001AC         ; word value in R0.  (For example, if R0 
+  438 000001AC         ;contains 0x000012FF, then 000012FF should 
+  439 000001AC         ;print on the terminal. 
+  440 000001AC         ;Calls: PutChar
+  441 000001AC         ;Input: R0   
+  442 000001AC         ;Output: print to command line
+  443 000001AC         ;Register Modiciations: PSR
+  444 000001AC B583            PUSH             {R0,R1,R7,LR} ;preserve registe
+                                                            r values
+  445 000001AE 0007            MOVS             R7,R0       ;save copy of R0
+  446 000001B0 2100            MOVS             R1,#0       ;initialize shift v
+                                                            alue
+  447 000001B2         LOOP
+  448 000001B2 0038            MOVS             R0,R7
+  449 000001B4 4088            LSLS             R0,R0,R1    ;shift R0 left 
+  450 000001B6 0F00            LSRS             R0,R0,#28   ;shift R0 right
+  451 000001B8 280A            CMP              R0,#10      ;check if number is
+                                                             bigger than or equ
+                                                            al to 10
+  452 000001BA D201            BHS              ISHEX       ;if yes, it's a let
+                                                            ter
+  453 000001BC 3030            ADDS             R0,R0,#'0'  ;if no, it's a numb
+                                                            er
+  454 000001BE E000            B                PRNT        ;print the number
+  455 000001C0         ISHEX
+  456 000001C0 3037            ADDS             R0,R0,#('A'-10) ;convert number
+                                                             to hex letter
+  457 000001C2         PRNT
+  458 000001C2 F7FF FFFE       BL               PutChar     ;print the number
+  459 000001C6 1D09            ADDS             R1,R1,#4    ;shift value += 4
+  460 000001C8 2920            CMP              R1,#32      ;if shift value is 
+                                                            32, no more charact
+                                                            ers 
+  461 000001CA D000            BEQ              QUIT        ;then quit
+  462 000001CC E7F1            B                LOOP        ;else loop
+  463 000001CE         QUIT
+  464 000001CE BD83            POP              {R0,R1,R7,PC} ;restore register
+                                                             values
+  465 000001D0         
+
+
+
+ARM Macro Assembler    Page 12 Circular FIFO Queue Operations
+
+
+  466 000001D0                 ENDP
+  467 000001D0         
+  468 000001D0         PutNumUB
+                               PROC             {R0-R14},{}
+  469 000001D0         ;Printss to the terminal screen 
+  470 000001D0         ;the text decimal representation
+  471 000001D0         ; of the unsigned byte value in R0.  
+  472 000001D0         ;Calls: PutNumU
+  473 000001D0         ;Inputs: R0
+  474 000001D0         ;Outputs:
+  475 000001D0         ;Register Modifications:
+  476 000001D0         
+  477 000001D0 B502            PUSH             {R1, LR}    ;preserve register 
+                                                            values
+  478 000001D2 21FF            MOVS             R1, #0xFF   ;Mask off everythin
+                                                            g but the last byte
+                                                            
+  479 000001D4 4008            ANDS             R0, R0, R1
+  480 000001D6 F7FF FFFE       BL               PutNumU
+  481 000001DA BD02            POP              {R1, PC}
+  482 000001DC         
+  483 000001DC                 ENDP
+  484 000001DC         
+  485 000001DC         GetStringSB
+                               PROC             {R0-R14},{}
+  486 000001DC         ;Read & store string from command line
+  487 000001DC         ;Calls: GetChar, PutChar
+  488 000001DC         ;Input: R0, R1 
+  489 000001DC         ;Output: Prints to command line
+  490 000001DC         ;Register Modifications:  
+  491 000001DC B50F            PUSH             {R0,R1,R2,R3,LR} ;store registe
+                                                            r vallues
+  492 000001DE 1E49            SUBS             R1,R1,#1    ;R1 <- MAX_STRING -
+                                                             1
+  493 000001E0 2200            MOVS             R2,#0       ;clear R2   
+  494 000001E2 0003            MOVS             R3,R0       ;store string point
+                                                            er 
+  495 000001E4         GSLOOP
+  496 000001E4 F000 F8D5       BL               GetChar     ;store character fr
+                                                            om string
+  497 000001E8 428A            CMP              R2,R1       ;is the string smal
+                                                            ler than MAX_STRING
+                                                            ?
+  498 000001EA D208            BHS              OVRFLW      ;if yes, branch    
+                                                             
+  499 000001EC 280D            CMP              R0,#0x0D
+  500 000001EE D010            BEQ              GSQUIT      ;quit on carriage r
+                                                            eturn
+  501 000001F0 287F            CMP              R0,#0x7F
+  502 000001F2 D007            BEQ              ADDCHK      ;go back one on bac
+                                                            kspace
+  503 000001F4 5498            STRB             R0,[R3,R2]  ;store char in M[R3
+                                                            +R2]
+  504 000001F6 F7FF FFFE       BL               PutChar     ;print the characte
+                                                            r         
+  505 000001FA 1C52            ADDS             R2,R2,#1    ;increment offset  
+                                                                    
+  506 000001FC E7F2            B                GSLOOP      ;go to start of loo
+                                                            p
+
+
+
+ARM Macro Assembler    Page 13 Circular FIFO Queue Operations
+
+
+  507 000001FE         OVRFLW
+  508 000001FE 280D            CMP              R0,#0x0D
+  509 00000200 D007            BEQ              GSQUIT      ;quit on carriage r
+                                                            eturn
+  510 00000202 E7EF            B                GSLOOP      ;go to start of loo
+                                                            p
+  511 00000204         ADDCHK
+  512 00000204 2A00            CMP              R2,#0
+  513 00000206 D0ED            BEQ              GSLOOP      ;go to start of loo
+                                                            p if backspaced on 
+                                                            nothing
+  514 00000208 1E52            SUBS             R2,R2,#1    ;else go back one b
+                                                            yte
+  515 0000020A 207F            MOVS             R0,#0x7F    ;load backspace int
+                                                            o R0
+  516 0000020C F7FF FFFE       BL               PutChar     ;send backspace to 
+                                                            command line
+  517 00000210 E7E8            B                GSLOOP      ;go to start of loo
+                                                            p
+  518 00000212         GSQUIT
+  519 00000212 2000            MOVS             R0,#0       ;clear R0
+  520 00000214 5498            STRB             R0,[R3,R2]  ;store 0 in M[R3+R2
+                                                            ]
+  521 00000216 200D            MOVS             R0,#0x0D    ;load carriage retu
+                                                            rn into R0
+  522 00000218 F7FF FFFE       BL               PutChar     ;print carriage ret
+                                                            urn
+  523 0000021C 200A            MOVS             R0,#0x0A    ;load line feed int
+                                                            o R0
+  524 0000021E F7FF FFFE       BL               PutChar     ;print line feed
+  525 00000222 BD0F            POP              {R0,R1,R2,R3,PC} ;restore regis
+                                                            ter values
+  526 00000224         
+  527 00000224                 ENDP
+  528 00000224         
+  529 00000224         PutStringSB
+                               PROC             {R0-R14},{}
+  530 00000224         ;Print string to command line
+  531 00000224         ;Calls: PutChar
+  532 00000224         ;Input: R0
+  533 00000224         ;Output: Print to command line
+  534 00000224         ;Register Modifications:  
+  535 00000224 B507            PUSH             {R0,R1,R2,LR} ;preserve registe
+                                                            r values
+  536 00000226 2100            MOVS             R1,#0       ;clear R1
+  537 00000228 0002            MOVS             R2,R0       ;store string point
+                                                            er in R2
+  538 0000022A         PSLOOP
+  539 0000022A 5C50            LDRB             R0,[R2,R1]  ;load character int
+                                                            o R0
+  540 0000022C 2800            CMP              R0,#0
+  541 0000022E D003            BEQ              PSQUIT      ;quit on Null
+  542 00000230 1C49            ADDS             R1,R1,#1    ;increment offset
+  543 00000232 F7FF FFFE       BL               PutChar     ;print the characte
+                                                            r
+  544 00000236 E7F8            B                PSLOOP      ;go to start of loo
+                                                            p
+  545 00000238         PSQUIT
+  546 00000238 BD07            POP              {R0,R1,R2,PC} ;restore register
+
+
+
+ARM Macro Assembler    Page 14 Circular FIFO Queue Operations
+
+
+                                                             values
+  547 0000023A         
+  548 0000023A                 ENDP
+  549 0000023A         
+  550 0000023A         PutNumU PROC             {R0-R14},{}
+  551 0000023A         ;Prints decimal representation of the unsigned word valu
+                       e in R0
+  552 0000023A         ;Calls: DIVU, PutChar
+  553 0000023A         ;Input: R0
+  554 0000023A         ;Output: Print to command line
+  555 0000023A         ;Register Modifications:
+  556 0000023A B507            PUSH             {R0,R1,R2,LR} ;preserve registe
+                                                            r values
+  557 0000023C 2800            CMP              R0,#0       ;if number is 0
+  558 0000023E D024            BEQ              ISZERO      ;branch
+  559 00000240 2200            MOVS             R2,#0       ;clear R2
+  560 00000242 0001            MOVS             R1,R0       ;set R1 to number 
+  561 00000244 4865            LDR              R0,=DIV1M
+  562 00000246 F7FF FFFE       BL               DIVU        ;Number/1000000
+  563 0000024A F000 F841       BL               PRNTHLPR    ;print result
+  564 0000024E 4864            LDR              R0,=DIV100K
+  565 00000250 F7FF FFFE       BL               DIVU        ;Number/100000
+  566 00000254 F000 F83C       BL               PRNTHLPR    ;print result
+  567 00000258 4862            LDR              R0,=DIV10K
+  568 0000025A F7FF FFFE       BL               DIVU        ;Number/10000
+  569 0000025E F000 F837       BL               PRNTHLPR    ;print result
+  570 00000262 4861            LDR              R0,=DIV1K
+  571 00000264 F7FF FFFE       BL               DIVU        ;Number/1000
+  572 00000268 F000 F832       BL               PRNTHLPR    ;print result
+  573 0000026C 2064            MOVS             R0,#0x64
+  574 0000026E F7FF FFFE       BL               DIVU        ;Number/100
+  575 00000272 F000 F82D       BL               PRNTHLPR    ;print result
+  576 00000276 200A            MOVS             R0,#0xA
+  577 00000278 F7FF FFFE       BL               DIVU        ;Number/10
+  578 0000027C F000 F828       BL               PRNTHLPR    ;print result
+  579 00000280 0008            MOVS             R0,R1       ;load remainder int
+                                                            o R0
+  580 00000282 3030            ADDS             R0,R0,#0x30 ;convert to ascii
+  581 00000284 F7FF FFFE       BL               PutChar     ;print the number
+  582 00000288 BD07            POP              {R0,R1,R2,PC} ;restore register
+                                                             values
+  583 0000028A         ISZERO
+  584 0000028A 2030            MOVS             R0,#0x30
+  585 0000028C F7FF FFFE       BL               PutChar     ;print "0"
+  586 00000290 BD07            POP              {R0,R1,R2,PC} ;restore register
+                                                             values
+  587 00000292                 ENDP
+  588 00000292         
+  589 00000292         DIVU    PROC             {R2-R14},{}
+  590 00000292         ;Computes R1 / R0 into R0 remainder R1
+  591 00000292         ;Calls: DIVU, PutChar
+  592 00000292         ;Input: R0, R1
+  593 00000292         ;Output: R0, R1
+  594 00000292         ;Register Modifications: R0, R1
+  595 00000292 B418            PUSH             {R3,R4}     ; store values of R
+                                                            3 and R4
+  596 00000294 2800            CMP              R0, #0      ;compare divisor to
+                                                             0
+  597 00000296 D002            BEQ              SET_CAR     ;if divisor is 0, g
+
+
+
+ARM Macro Assembler    Page 15 Circular FIFO Queue Operations
+
+
+                                                            o to special case
+  598 00000298 2900            CMP              R1, #0      ;compare dividend t
+                                                            o zero
+  599 0000029A D00E            BEQ              ZERODIV     ;if dividend is 0, 
+                                                            
+  600 0000029C E007            B                BRK         ;go to special case
+                                                            
+  601 0000029E         SET_CAR
+  602 0000029E F3EF 8300       MRS              R3,APSR     ;set C flag to 1
+  603 000002A2 2420            MOVS             R4,#0x20
+  604 000002A4 0624            LSLS             R4,R4,#24
+  605 000002A6 4323            ORRS             R3,R3,R4
+  606 000002A8 F383 8800       MSR              APSR,R3
+  607 000002AC E00E            B                ENDDIV
+  608 000002AE         BRK
+  609 000002AE 2300            MOVS             R3, #0      ;put quotient in R3
+                                                            
+  610 000002B0         
+  611 000002B0         DIVWHILE
+  612 000002B0 4288            CMP              R0, R1      ;compare R0 and R1
+  613 000002B2 D803            BHI              ENDDIVWHILE ;if R0<R1 exit the 
+                                                            loop
+  614 000002B4 1C5B            ADDS             R3, R3, #1  ;quotient ++
+  615 000002B6 1A09            SUBS             R1, R1, R0  ;R1 = R1 - R0
+  616 000002B8 E7FA            B                DIVWHILE
+  617 000002BA         
+  618 000002BA         ZERODIV
+  619 000002BA 2300            MOVS             R3,#0       ;IF dividend is zer
+                                                            o, remainder is alw
+                                                            ays zero
+  620 000002BC         ENDDIVWHILE
+  621 000002BC 0018            MOVS             R0, R3      ;R0 <- quotient, re
+                                                            mainder = R1
+  622 000002BE F3EF 8300       MRS              R3,APSR     ;clear C flag to 0
+  623 000002C2 2420            MOVS             R4,#0x20
+  624 000002C4 0624            LSLS             R4,R4,#24
+  625 000002C6 43A3            BICS             R3,R3,R4
+  626 000002C8 F383 8800       MSR              APSR,R3
+  627 000002CC         
+  628 000002CC         ENDDIV
+  629 000002CC BC18            POP              {R3,R4}     ;clear changes from
+                                                             registers
+  630 000002CE 4770            BX               LR          ;quit subroutine
+  631 000002D0                 ENDP
+  632 000002D0         
+  633 000002D0         PRNTHLPR
+  634 000002D0         ;Prints character if character is not a leading zero
+  635 000002D0         ;Calls: PutChar
+  636 000002D0         ;Input: R0, R2
+  637 000002D0         ;Output: R0, R2
+  638 000002D0         ;Register Modifications: R0, R2
+  639 000002D0         
+  640 000002D0 B500            PUSH             {LR}        ;preserve register 
+                                                            values
+  641 000002D2 2A01            CMP              R2,#1       ;if character isnt 
+                                                            a leading character
+                                                            
+  642 000002D4 D001            BEQ              PRINTCHAR   ;print it
+  643 000002D6 2800            CMP              R0,#0       ;if character is le
+
+
+
+ARM Macro Assembler    Page 16 Circular FIFO Queue Operations
+
+
+                                                            ading zero
+  644 000002D8 D003            BEQ              PRNTQUITT   ;quit
+  645 000002DA         PRINTCHAR
+  646 000002DA 3030            ADDS             R0,R0,#0x30 ;convert char to as
+                                                            cii
+  647 000002DC F7FF FFFE       BL               PutChar     ;print character
+  648 000002E0 2201            MOVS             R2,#1       ;indicates all futu
+                                                            re numbers aren't l
+                                                            eading
+  649 000002E2         PRNTQUITT
+  650 000002E2 BD00            POP              {PC}        ;restore register v
+                                                            alues
+  651 000002E4         
+  652 000002E4         NEWLINE
+  653 000002E4         ;Prints a carriage return and a line feed
+  654 000002E4         ;Calls: PutChar
+  655 000002E4         ;Input:
+  656 000002E4         ;Output: Print to command line
+  657 000002E4         ;Register Modifications: 
+  658 000002E4 B501            PUSH             {R0,LR}     ;preserve register 
+                                                            values
+  659 000002E6 200D            MOVS             R0,#0x0D    ;load carriage retu
+                                                            rn into R0
+  660 000002E8 F7FF FFFE       BL               PutChar     ;print carriage ret
+                                                            urn
+  661 000002EC 200A            MOVS             R0,#0x0A    ;load line feed int
+                                                            o R0
+  662 000002EE F7FF FFFE       BL               PutChar     ;print line feed
+  663 000002F2 BD01            POP              {R0,PC}     ;restore register v
+                                                            alues
+  664 000002F4         
+  665 000002F4         PRINTCMD
+  666 000002F4         ;Prints the character that was input
+  667 000002F4         ;Calls: PutChar
+  668 000002F4         ;Input: R6
+  669 000002F4         ;Output: Print to command line
+  670 000002F4         ;Register Modifications: 
+  671 000002F4 B501            PUSH             {R0,LR}     ;preserve register 
+                                                            value
+  672 000002F6 0030            MOVS             R0,R6       ;move the value of 
+                                                            the char into R0
+  673 000002F8 F7FF FFFE       BL               PutChar     ;print the characte
+                                                            r
+  674 000002FC BD01            POP              {R0,PC}     ;restore register v
+                                                            alue
+  675 000002FE         
+  676 000002FE         STATPRINT
+  677 000002FE         ;Prints the queue status of the queue to the command lin
+                       e
+  678 000002FE         ;Calls: PutStringSB, PutNumHex, PutNumUB
+  679 000002FE         ;Input: R1
+  680 000002FE         ;Output: Print to command line
+  681 000002FE         ;Register Modifications: 
+  682 000002FE B501            PUSH             {R0,LR}     ;preserve register 
+                                                            value
+  683 00000300 4835            LDR              R0,=StatIn  ;print the lead tex
+                                                            t for the inpointer
+                                                            
+  684 00000302 F7FF FFFE       BL               PutStringSB
+
+
+
+ARM Macro Assembler    Page 17 Circular FIFO Queue Operations
+
+
+  685 00000306 6808            LDR              R0,[R1, #IN_PTR] ;print the hex
+                                                             value of the inpoi
+                                                            nter
+  686 00000308 F7FF FFFE       BL               PutNumHex
+  687 0000030C 4837            LDR              R0,=StatOut ;print the lead tex
+                                                            t for the outpointe
+                                                            r
+  688 0000030E F7FF FFFE       BL               PutStringSB
+  689 00000312 6848            LDR              R0,[R1, #OUT_PTR] ;print the he
+                                                            x value of the outp
+                                                            ointer
+  690 00000314 F7FF FFFE       BL               PutNumHex
+  691 00000318 4835            LDR              R0,=StatNum ;print the lead tex
+                                                            t for the num of en
+                                                            queued chars
+  692 0000031A F7FF FFFE       BL               PutStringSB
+  693 0000031E 7C48            LDRB             R0,[R1,#NUM_ENQD] ;print the de
+                                                            cimal value of enqu
+                                                            eued chars
+  694 00000320 F7FF FFFE       BL               PutNumUB
+  695 00000324 BD01            POP              {R0,PC}     ;restore register v
+                                                            alue
+  696 00000326         
+  697 00000326         
+  698 00000326         Init_UART0_Polling
+  699 00000326         ;Store initial values of R0, R1, and R2
+  700 00000326 B407            PUSH             {R0,R1,R2}
+  701 00000328         ;Select MCGPLLCLK / 2 as UART0 clock source
+  702 00000328 4833            LDR              R0,=SIM_SOPT2
+  703 0000032A 4934            LDR              R1,=SIM_SOPT2_UART0SRC_MASK
+  704 0000032C 6802            LDR              R2,[R0,#0]
+  705 0000032E 438A            BICS             R2,R2,R1
+  706 00000330 4933            LDR              R1,=SIM_SOPT2_UART0_MCGPLLCLK_D
+IV2
+  707 00000332 430A            ORRS             R2,R2,R1
+  708 00000334 6002            STR              R2,[R0,#0]
+  709 00000336         ;Enable external connection for UART0
+  710 00000336 4833            LDR              R0,=SIM_SOPT5
+  711 00000338 4933            LDR              R1,= SIM_SOPT5_UART0_EXTERN_MAS
+K_CLEAR
+  712 0000033A 6802            LDR              R2,[R0,#0]
+  713 0000033C 438A            BICS             R2,R2,R1
+  714 0000033E 6002            STR              R2,[R0,#0]
+  715 00000340         ;Enable clock for UART0 module
+  716 00000340 4832            LDR              R0,=SIM_SCGC4
+  717 00000342 4933            LDR              R1,= SIM_SCGC4_UART0_MASK
+  718 00000344 6802            LDR              R2,[R0,#0]
+  719 00000346 430A            ORRS             R2,R2,R1
+  720 00000348 6002            STR              R2,[R0,#0]
+  721 0000034A         ;Enable clock for Port A module
+  722 0000034A 4832            LDR              R0,=SIM_SCGC5
+  723 0000034C 4932            LDR              R1,= SIM_SCGC5_PORTA_MASK
+  724 0000034E 6802            LDR              R2,[R0,#0]
+  725 00000350 430A            ORRS             R2,R2,R1
+  726 00000352 6002            STR              R2,[R0,#0]
+  727 00000354         ;Connect PORT A Pin 1 (PTA1) to UART0 Rx (J1 Pin 02)
+  728 00000354 4831            LDR              R0,=PORTA_PCR1
+  729 00000356 4932            LDR              R1,=PORT_PCR_SET_PTA1_UART0_RX
+  730 00000358 6001            STR              R1,[R0,#0]
+
+
+
+ARM Macro Assembler    Page 18 Circular FIFO Queue Operations
+
+
+  731 0000035A         ;Connect PORT A Pin 2 (PTA2) to UART0 Tx (J1 Pin 04)
+  732 0000035A 4832            LDR              R0,=PORTA_PCR2
+  733 0000035C 4930            LDR              R1,=PORT_PCR_SET_PTA2_UART0_TX
+  734 0000035E 6001            STR              R1,[R0,#0]
+  735 00000360         ;Disable UART0 receiver and transmitter
+  736 00000360 4831            LDR              R0,=UART0_BASE
+  737 00000362 210C            MOVS             R1,#UART0_C2_T_R
+  738 00000364 78C2            LDRB             R2,[R0,#UART0_C2_OFFSET]
+  739 00000366 438A            BICS             R2,R2,R1
+  740 00000368 70C2            STRB             R2,[R0,#UART0_C2_OFFSET]
+  741 0000036A         ;Set UART0 for 9600 baud, 8N1 protocol
+  742 0000036A 2101            MOVS             R1,#UART0_BDH_9600
+  743 0000036C 7001            STRB             R1,[R0,#UART0_BDH_OFFSET]
+  744 0000036E 2138            MOVS             R1,#UART0_BDL_9600
+  745 00000370 7041            STRB             R1,[R0,#UART0_BDL_OFFSET]
+  746 00000372 2100            MOVS             R1,#UART0_C1_8N1
+  747 00000374 7081            STRB             R1,[R0,#UART0_C1_OFFSET]
+  748 00000376 2100            MOVS             R1,#UART0_C3_NO_TXINV
+  749 00000378 7181            STRB             R1,[R0,#UART0_C3_OFFSET]
+  750 0000037A 210F            MOVS             R1,#UART0_C4_NO_MATCH_OSR_16
+  751 0000037C 7281            STRB             R1,[R0,#UART0_C4_OFFSET]
+  752 0000037E 2100            MOVS             R1,#UART0_C5_NO_DMA_SSR_SYNC
+  753 00000380 72C1            STRB             R1,[R0,#UART0_C5_OFFSET]
+  754 00000382 211F            MOVS             R1,#UART0_S1_CLEAR_FLAGS
+  755 00000384 7101            STRB             R1,[R0,#UART0_S1_OFFSET]
+  757 00000386 21C0            MOVS             R1,           #UART0_S2_NO_RXI
+NV_BRK10_NO_LBKDETECT_CLEAR_FLAGS
+  758 00000388 7141            STRB             R1,[R0,#UART0_S2_OFFSET]
+  759 0000038A         ;Enable UART0 receiver and transmitter
+  760 0000038A 210C            MOVS             R1,#UART0_C2_T_R
+  761 0000038C 70C1            STRB             R1,[R0,#UART0_C2_OFFSET]
+  762 0000038E         ;Restore original register values
+  763 0000038E BC07            POP              {R0,R1,R2}
+  764 00000390 4770            BX               LR
+  765 00000392         
+  766 00000392         GetChar
+  767 00000392         ;Takes a character from input and stores it in R0
+  768 00000392         ;Inputs: R1, R2, R3
+  769 00000392         ;Outputs: R0
+  770 00000392         ;Register Modifications: R0, R1, R2, R3
+  771 00000392         ;Store initial values of R1, R1, and R2
+  772 00000392 B40E            PUSH             {R1, R2, R3}
+  773 00000394         ;Poll RDRF until UART0 ready to receive 
+  774 00000394 4924            LDR              R1, =UART0_BASE
+  775 00000396 2220            MOVS             R2, #UART0_S1_RDRF_MASK
+  776 00000398         PollRx
+  777 00000398 790B            LDRB             R3, [R1, #UART0_S1_OFFSET]
+  778 0000039A 4013            ANDS             R3, R3, R2
+  779 0000039C D0FC            BEQ              PollRx
+  780 0000039E         ;Receive character and store in R0
+  781 0000039E 79C8            LDRB             R0, [R1, #UART0_D_OFFSET]
+  782 000003A0 BC0E            POP              {R1, R2, R3}
+  783 000003A2 4770            BX               LR          ; return to where t
+                                                            he branch was calle
+                                                            d from
+  784 000003A4         PutChar
+  785 000003A4         ;Transmits the character stored in R0
+  786 000003A4         ;Inputs: R1, R2, R3
+  787 000003A4         ;Outputs: R0
+
+
+
+ARM Macro Assembler    Page 19 Circular FIFO Queue Operations
+
+
+  788 000003A4         ;Register Modifications: R0, R1, R2, R3
+  789 000003A4         ;Store initial values of R1, R2, and R3
+  790 000003A4 B40E            PUSH             {R1, R2, R3}
+  791 000003A6         ;Poll TDRE Until UART0 is ready for transmit
+  792 000003A6 4920            LDR              R1, =UART0_BASE
+  793 000003A8 2280            MOVS             R2, #UART0_S1_TDRE_MASK
+  794 000003AA         
+  795 000003AA         PollTx
+  796 000003AA 790B            LDRB             R3, [R1, #UART0_S1_OFFSET]
+  797 000003AC 4013            ANDS             R3, R3, R2
+  798 000003AE D0FC            BEQ              PollTx
+  799 000003B0         ;Transmit Character Stored in R0
+  800 000003B0 71C8            STRB             R0, [R1, #UART0_D_OFFSET]
+  801 000003B2         ;Restore original register values
+  802 000003B2 BC0E            POP              {R1, R2, R3}
+  803 000003B4 4770            BX               LR          ; return to where t
+                                                            he branch was calle
+                                                            d from
+  804 000003B6         
+  805 000003B6         ;>>>>>   end subroutine code <<<<<
+  806 000003B6 00 00           ALIGN
+  807 000003B8         ;*******************************************************
+                       *********
+  808 000003B8         ;Vector Table Mapped to Address 0 at Reset
+  809 000003B8         ;Linker requires __Vectors to be exported
+  810 000003B8 00000000 
+              00000000 
+              00000000 
+              00000000 
+              00000000 
+              00000000 
+              00000000 
+              00000000 
+              00000000 
+              000F4240 
+              000186A0 
+              00002710 
+              000003E8 
+              00000000 
+              00000000 
+              00000000 
+              40048004 
+              0C000000 
+              04010000 
+              40048010 
+              00010007 
+              40048034 
+              00000400 
+              40048038 
+              00000200 
+              40049004 
+              01000200 
+              40049008 
+              4006A000         AREA             RESET, DATA, READONLY
+  811 00000000                 EXPORT           __Vectors
+  812 00000000                 EXPORT           __Vectors_End
+  813 00000000                 EXPORT           __Vectors_Size
+  814 00000000                 IMPORT           __initial_sp
+  815 00000000                 IMPORT           Dummy_Handler
+
+
+
+ARM Macro Assembler    Page 20 Circular FIFO Queue Operations
+
+
+  816 00000000                 IMPORT           HardFault_Handler
+  817 00000000         __Vectors
+  818 00000000         ;ARM core vectors
+  819 00000000 00000000        DCD              __initial_sp ;00:end of stack
+  820 00000004 00000000        DCD              Reset_Handler ;01:reset vector
+  821 00000008 00000000        DCD              Dummy_Handler ;02:NMI
+  822 0000000C 00000000        DCD              HardFault_Handler 
+                                                            ;03:hard fault
+  823 00000010 00000000        DCD              Dummy_Handler ;04:(reserved)
+  824 00000014 00000000        DCD              Dummy_Handler ;05:(reserved)
+  825 00000018 00000000        DCD              Dummy_Handler ;06:(reserved)
+  826 0000001C 00000000        DCD              Dummy_Handler ;07:(reserved)
+  827 00000020 00000000        DCD              Dummy_Handler ;08:(reserved)
+  828 00000024 00000000        DCD              Dummy_Handler ;09:(reserved)
+  829 00000028 00000000        DCD              Dummy_Handler ;10:(reserved)
+  830 0000002C 00000000        DCD              Dummy_Handler ;11:SVCall (super
+                                                            visor call)
+  831 00000030 00000000        DCD              Dummy_Handler ;12:(reserved)
+  832 00000034 00000000        DCD              Dummy_Handler ;13:(reserved)
+  833 00000038 00000000        DCD              Dummy_Handler ;14:PendableSrvRe
+                                                            q (pendable request
+                                                             
+  834 0000003C         ;   for system service)
+  835 0000003C 00000000        DCD              Dummy_Handler ;15:SysTick (syst
+                                                            em tick timer)
+  836 00000040 00000000        DCD              Dummy_Handler ;16:DMA channel 0
+                                                             xfer complete/erro
+                                                            r
+  837 00000044 00000000        DCD              Dummy_Handler ;17:DMA channel 1
+                                                             xfer complete/erro
+                                                            r
+  838 00000048 00000000        DCD              Dummy_Handler ;18:DMA channel 2
+                                                             xfer complete/erro
+                                                            r
+  839 0000004C 00000000        DCD              Dummy_Handler ;19:DMA channel 3
+                                                             xfer complete/erro
+                                                            r
+  840 00000050 00000000        DCD              Dummy_Handler ;20:(reserved)
+  841 00000054 00000000        DCD              Dummy_Handler ;21:command compl
+                                                            ete; read collision
+                                                            
+  842 00000058 00000000        DCD              Dummy_Handler ;22:low-voltage d
+                                                            etect;
+  843 0000005C         ;   low-voltage warning
+  844 0000005C 00000000        DCD              Dummy_Handler ;23:low leakage w
+                                                            akeup
+  845 00000060 00000000        DCD              Dummy_Handler ;24:I2C0
+  846 00000064 00000000        DCD              Dummy_Handler ;25:I2C1
+  847 00000068 00000000        DCD              Dummy_Handler ;26:SPI0 (all IRQ
+                                                             sources)
+  848 0000006C 00000000        DCD              Dummy_Handler ;27:SPI1 (all IRQ
+                                                             sources)
+  849 00000070 00000000        DCD              Dummy_Handler ;28:UART0 (status
+                                                            ; error)
+  850 00000074 00000000        DCD              Dummy_Handler ;29:UART1 (status
+                                                            ; error)
+  851 00000078 00000000        DCD              Dummy_Handler ;30:UART2 (status
+                                                            ; error)
+  852 0000007C 00000000        DCD              Dummy_Handler ;31:ADC0
+
+
+
+ARM Macro Assembler    Page 21 Circular FIFO Queue Operations
+
+
+  853 00000080 00000000        DCD              Dummy_Handler ;32:CMP0
+  854 00000084 00000000        DCD              Dummy_Handler ;33:TPM0
+  855 00000088 00000000        DCD              Dummy_Handler ;34:TPM1
+  856 0000008C 00000000        DCD              Dummy_Handler ;35:TPM2
+  857 00000090 00000000        DCD              Dummy_Handler ;36:RTC (alarm)
+  858 00000094 00000000        DCD              Dummy_Handler ;37:RTC (seconds)
+                                                            
+  859 00000098 00000000        DCD              Dummy_Handler ;38:PIT (all IRQ 
+                                                            sources)
+  860 0000009C 00000000        DCD              Dummy_Handler ;39:I2S0
+  861 000000A0 00000000        DCD              Dummy_Handler ;40:USB0
+  862 000000A4 00000000        DCD              Dummy_Handler ;41:DAC0
+  863 000000A8 00000000        DCD              Dummy_Handler ;42:TSI0
+  864 000000AC 00000000        DCD              Dummy_Handler ;43:MCG
+  865 000000B0 00000000        DCD              Dummy_Handler ;44:LPTMR0
+  866 000000B4 00000000        DCD              Dummy_Handler ;45:Segment LCD
+  867 000000B8 00000000        DCD              Dummy_Handler ;46:PORTA pin det
+                                                            ect
+  868 000000BC 00000000        DCD              Dummy_Handler ;47:PORTC and POR
+                                                            TD pin detect
+  869 000000C0         __Vectors_End
+  870 000000C0 000000C0 
+                       __Vectors_Size
+                               EQU              __Vectors_End - __Vectors
+  871 000000C0                 ALIGN
+  872 000000C0         ;*******************************************************
+                       *********
+  873 000000C0         ;Constants
+  874 000000C0                 AREA             MyConst,DATA,READONLY
+  875 00000000         ;>>>>> begin constants here <<<<<
+  876 00000000 54 79 70 
+              65 20 61 
+              20 71 75 
+              65 75 65 
+              20 63 6F 
+              6D 6D 61 
+              6E 64 20 
+              28 44 2C 
+              45 2C 48 
+              2C 50 2C 
+              53 29 3A 
+              20 00    Prompt  DCB              "Type a queue command (D,E,H,P,
+S): ", 0
+  877 00000023 46 61 69 
+              6C 75 72 
+              65 3A 20 
+              00       FailText
+                               DCB              "Failure: ", 0
+  878 0000002D 43 68 61 
+              72 61 63 
+              74 65 72 
+              20 74 6F 
+              20 65 6E 
+              71 75 65 
+              75 65 3A 
+              20 00    EnqPrompt
+                               DCB              "Character to enqueue: ", 0
+  879 00000044 53 75 63 
+              63 65 73 
+
+
+
+ARM Macro Assembler    Page 22 Circular FIFO Queue Operations
+
+
+              73 3A 20 
+              00       SuccText
+                               DCB              "Success: ", 0
+  880 0000004E 44 20 28 
+              64 65 71 
+              75 65 75 
+              65 29 2C 
+              20 45 20 
+              28 65 6E 
+              71 75 65 
+              75 65 29 
+              2C 20 48 
+              20 28 68 
+              65 6C 70 
+              29 2C 20 
+              50 20 28 
+              70 72 69 
+              6E 74 29 
+              2C 20 53 
+              20 28 73 
+              74 61 74 
+              75 73 29 
+              00       HelpText
+                               DCB              "D (dequeue), E (enqueue), H (h
+elp), P (print), S (status)",0
+  881 00000088 49 6E 3D 
+              30 78 00 StatIn  DCB              "In=0x", 0
+  882 0000008E 20 4F 75 
+              74 3D 30 
+              78 00    StatOut DCB              " Out=0x", 0
+  883 00000096 20 4E 75 
+              6D 3D 00 StatNum DCB              " Num=", 0
+  884 0000009C 53 74 61 
+              74 75 73 
+              3A 20 00 StatText
+                               DCB              "Status: ", 0
+  885 000000A5         ;>>>>>   end constants here <<<<<
+  886 000000A5 00 00 00        ALIGN
+  887 000000A8         ;*******************************************************
+                       *********
+  888 000000A8         ;Variables
+  889 000000A8                 AREA             MyData,DATA,READWRITE
+  890 00000000         ;>>>>> begin variables here <<<<<
+  891 00000000 00 00 00 
+              00       QBuffer SPACE            Q_BUF_SZ    ;Queue contents 
+  892 00000004 00 00 00 
+              00 00 00 
+              00 00 00 
+              00 00 00 
+              00 00 00 
+              00 00 00 QRecord SPACE            Q_REC_SZ    ;Queue management r
+                                                            ecord 
+  893 00000016         ;>>>>>   end variables here <<<<<
+  894 00000016 00 00           ALIGN
+  895 00000018                 END
+Command Line: --debug --diag_suppress=9931 --cpu=Cortex-M0+ --apcs=interwork --
+depend=.\objects\exercise07.d -o.\objects\exercise07.o -I.\RTE\_Target_1 -IC:\K
+eil_v5\ARM\PACK\Keil\Kinetis_KLxx_DFP\1.13.0\Device\Include -IC:\Keil_v5\ARM\CM
+SIS\Include --predefine="__EVAL SETA 1" --predefine="__UVISION_VERSION SETA 524
+
+
+
+ARM Macro Assembler    Page 23 Circular FIFO Queue Operations
+
+
+" --predefine="MKL46Z256xxx4 SETA 1" --list=.\listings\exercise07.lst exercise0
+7.s

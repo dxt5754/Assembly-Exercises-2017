@@ -1,0 +1,145 @@
+AddIntMultiU
+;Add the n-word unsigned number in memory starting 
+;at the address in R2 to the n-word unsigned number
+; in memory starting at the address in R1, and store
+; the result to memory starting at the address in R0,
+; where the value in R3 is n.  
+;If the result is a valid n-word unsigned number, 
+;it returns with the APSR C bit clear as the return code for success; 
+;otherwise it returns with the APSR C bit set as the return code for overflow.
+
+;Inputs: 	R0,R1,R2,R2
+;Outputs:	R0
+
+            PUSH {R1-R7, LR}
+            PUSH {R0-R1}
+            LDR R0, =APSRState            ;Initalize state of APSR C Flag
+            MOVS R1, #0;
+            STRB R1, [R0, #0]
+            POP {R0-R1}           
+            MOVS R5, #0            ;Initalize offset value
+ADD
+            CMP R3, #0
+            BEQ ADDEND
+            LDR R6, [R1, R5]
+            LDR R7, [R2, R5]
+            SUBS R3, R3, #1            ;decrement n      
+            ADDS R5, R5, #4            ;increment offset           
+            PUSH {R5}       
+            SUBS R5, R5, #4            ;store mem address  
+            BL SetAPSR           		;helper sub to set the APSR state
+            ADCS R6, R6, R7            
+            BL WriteAPSRC           	;Helper sub to set C flag
+            STR R6, [R0,R5]            
+            POP {R5}
+            BCS VCHK
+            B ADD            		;loop
+VCHK
+            CMP R3, #0
+            BNE ADD
+            MOVS R0, #1            	
+ADDEND
+
+            CMP R0, #1
+            BNE SUCC
+            B QUITADDMULTIU
+SUCC
+            MOVS R0, #0            		;if all goes well, set R0 to 0
+QUITADDMULTIU
+            POP {R1-R7, PC}
+			
+			
+GetHexIntMulti
+;Get an n-word unsigned number from the user 
+;typed in hexadecimal representation, and store
+; it in binary in memory starting at the address
+; in R0, where the value in R1 is n.  
+;The subroutine reads characters typed by the user
+; until the enter key is pressed by calling the 
+;subroutine GetStringSB.  It then converts the ASCII hexadecimal 
+;representation input by the user to binary, and 
+;it stores the binary value to memory at the address 
+;specified in R0.  If the result is a valid n-word 
+;unsigned number, it returns with the APSR C bit clear; 
+;otherwise, it returns with the APSR C bit set. 
+;Inputs: R0,R1
+;Outputs: None, stores car and sets C flag
+			PUSH	{R0,R1}		;preserve reg values
+			LDR	R1,[R1,#0]
+			LSLS	R1,#3
+			ADDS	R1,#1
+			BX	GetStringSB		;get string from user
+			POP	{R0,R1}			;restore reg values
+			PUSH	{R0-R6}		;preserve reg values
+			MOVS	R2,#3		;check if numwords exceeds 8n
+			LSLS	R2,R1,R2
+			CMP	R2,R1
+			BNE		QUITFAIL	;if yes, quit with C set
+			MOVS R3,#0			;initialize max size
+			ADDS	R5,R1,#1
+			MOVS	R6,#0
+LOOP
+			CMP	R3,R5
+			BHS	QUITSUCC
+			LDRB	R4,[R0,R3]
+			CMP		R4,#'a'			;Convert char to uppercase if not already
+			BLO		ISUPPERORNUM				
+			SUBS	R4,R4,#' '				
+ISUPPERORNUM						;if char is uppercase or num, store binary value
+			CMP	R4,#'A'
+			SUB	R4,#48
+			BHS STORE
+			SUBS	R4,R4,#7
+STORE								;store uppercase value, incrememnt counter	
+			CMP	R3 MOD 2, #0
+			BEQ	STORE
+			ADDS	R6,R6,R4
+			STRB	R6,[R0,R3]
+			ADDS	R3,R3,#1
+			B	LOOP
+STORE								
+			LSLS	R4,#4
+			ADDS	R3,R3,#1
+			B	LOOP
+	
+QUITFAIL
+			MRS		R3,APSR			;set C flag to 1 and quit
+			MOVS	R4,#0x20
+			LSLS	R4,R4,#24
+			ORRS	R3,R3,R4
+			MSR		APSR,R3
+			POP	{R0-R6}
+			BX		LR
+QUITSUCC
+			MRS 	R1, APSR		;clears C and quit
+			MOVS 	R3, #0x20
+			LSLS 	R1, R1, #24
+			BICS 	R1, R1, R3
+			MSR		APSR, R1
+			POP	{R0-R6}
+			BX		LR
+			
+			
+PutHexIntMulti
+;Output an n-word unsigned number, 
+;from memory starting at the address 
+;in R0, to the terminal in hexadecimal 
+;representation using 8n hex digits, 
+;where the value in R1 is n. 
+;Input: R0,R1
+;Output: prints to terminal
+;Calls: PutNumHex 
+			PUSH	{R2,R3}
+			MOVS	R3,R1
+			MOVS	R2,R1
+			LSLS	R2,R2,#2
+LOOP
+			LDRB	R0,[R0,R2]
+			BX		PutNumHex
+			CMP		R3,#0
+			BEQ		QUIT
+			SUBS	R3,R3,#1
+			SUBS	R2,R2,#4
+QUIT
+			POP	{R2,R3}		
+			BX	LR

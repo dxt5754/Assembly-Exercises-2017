@@ -1,0 +1,160 @@
+;Dean Trivisani
+;Exercise 07 Prelab
+;10/16/2017
+
+InitQueue   
+;Initializes the queue record structure at the 
+;address in R1 for the empty queue buffer at 
+;the address in R0 of size, 
+;(i.e., character capacity), given in R2.
+;Calls:
+;Input: R0, R1, R2
+;Output:  
+;Register Modiciations:
+			PUSH    {R3}        			;preserve register values
+            STR     R0,[R1,#IN_PTR]         ;sets the queue buffer address to InPointer
+            STR     R0,[R1,#OUT_PTR]        ;"	   "	"	   "	   "    " OutPointer
+            STR     R0,[R1,#BUF_STRT]       ;sets the buffer start address to the queue buffer address
+            ADDS    R3,R0,R2                ;adds the buffer size to the buffer starting address
+            STR     R3,[R1,#BUF_PAST]       ;store this new address
+            STR     R2,[R1,#BUF_SIZE]       ;set the buffer size to 4
+            MOVS    R3,#0                   ;clear R3
+            STRB    R3,[R1,#NUM_ENQD]       ;clear enqueued number
+            POP     {R3}                    ;restore register values
+            BX      LR                      ;break out of subroutine
+
+			
+DeQueue
+;Attempts to get a character from the queue 
+;whose record structure’s address is in R1:  
+;if the queue is not empty, dequeues a single
+; character from the queue to R0, and returns 
+;with the PSRC bit cleared, (i.e., 0), to report 
+;dequeue success; otherwise, returns with the 
+;PSRC bit set, (i.e., 1) to report dequeue failure.
+;Inputs: R1
+;Outputs: R0, C
+			PUSH {R1, R2, R3, R4}
+			LDRB R3, [R1, #NUM_ENQD]		;set flag if no queued
+			CMP R3, #0
+			BLE INVALID
+			LDR R0, [R1, #OUT_PTR]			;R0 <- value
+			LDRB R0, [R0, #0]				
+			LDRB R3, [R1, #NUM_ENQD]		;NumEnqueued -=1
+			SUBS R3, R3, #1	
+			STRB R3, [R1, #NUM_ENQD] 
+			LDR R3, [R1, #OUT_PTR]			;OutPointer +=1
+			ADDS R3, R3, #1
+			STR R3, [R1, #OUT_PTR] 
+			LDR R4, [R1, #BUF_PAST]			;if OutPointer >= BufferPast, wrap,
+			CMP R3, R4
+			BGE WRAP
+			B CLEARC						;Clear C
+			
+WRAP
+			LDR R3, [R1, #BUF_START]		;OutPointer = BufferStart
+			STR R3, [R1, #OUT_PTR]			;wrap
+			
+CLEARC
+			MRS R1, APSR					;clears C
+			MOVS R3, #0x20
+			LSLS R1, R1, #24
+			BICS R1, R1, R3
+			MSR	APSR, R1
+			B QUIT							;quit
+INVALID
+			MRS R1, APSR					;set C
+			MOVS R3, #0x20
+			LSLS R3, R3, #24
+			ORRS R1, R1, R3
+			MSR APSR, R1
+			
+QUIT
+			POP {R1, R2, R3, R4}			;restore register values
+			BX	LR							;exit subroutine
+			
+Enqueue
+;Attempts to put a character in the queue
+; whose queue record structure’s address
+; is in R1—if the queue is not full, enqueues
+; the single character from R0 to the queue, 
+;and returns with the PSRC cleared to 
+;report enqueue success; otherwise, returns 
+;with the PSRC bit set to report enqueue failure.
+;Calls:
+;Input: R0,R1
+;Output: PSR C flag flag (0 = success, 1 = failure)
+;Register Modiciations: No registers, PSR
+            PUSH    {R3-R6}                 ;preserve register values
+            LDRB    R3,[R1,#NUM_ENQD]       ;R3 <- NumEnqueued
+            LDRB    R4,[R1,#BUF_SIZE]       ;R4 <- BufferSize
+            CMP     R3,R4                   ;if value >= buffer size, go to carry
+            BGE     CARRY                 	
+            LDR     R5,[R1,#IN_PTR]         ;R5 <- InPointer
+            LDR     R6,[R1,#BUF_PAST]       ;R6 <- BufferPast
+            STRB    R0,[R5,#0]              ;store value at InPointer
+            ADDS    R3,R3,#1                ;NumEnqueued += 1
+            STRB    R3,[R1,#NUM_ENQD]       ;R3 <- NumEnqueued
+            ADDS    R5,R5,#1                ;InPointer += 1
+            CMP     R5,R6                   ;if Inpointer < BufferPast, skip reset
+            BLO     SKIP               		
+            LDR     R5,[R1,#BUF_STRT]       ;reset InPointer
+SKIP   		
+			STR     R5,[R1,#IN_PTR]         ;Inpointer <- R1
+            MRS     R3,APSR                 ;R3 <- APSR
+            MOVS    R4,#0x20                ;R4 <- #0x20, for logic
+            LSLS    R4,R4,#24               ;shift to MSB
+            BICS    R3,R3,R4                ;clear C
+            MSR     APSR,R3                     
+            B       QUIT                    ;quit
+CARRY     	
+			MRS     R3,APSR                 ;set C
+            MOVS    R4,#0x20                
+            LSLS    R4,R4,#24               
+            ORRS    R3,R3,R4                
+            MSR     APSR,R3                 
+QUIT      	
+			POP     {R3-R6}                 ;restore register values 
+            BX      LR                      ;exit subroutine
+			
+PutNumHex
+;Prints to the terminal screen the text
+; hexadecimal representation of the unsigned
+; word value in R0.  (For example, if R0 
+;contains 0x000012FF, then 000012FF should 
+;print on the terminal. 
+;Calls: PutChar
+;Input: R0   
+;Output: print to command line
+;Register Modiciations: PSR
+            PUSH        {R0,R1,R7,LR}   	;preserve register values
+            MOVS        R7,R0           	;save copy of R0
+            MOVS        R1,#0           	;initialize shift value
+LOOP     	MOVS        R0,R7           	;put R0 back
+            LSLS        R0,R0,R1        	;shift R0 left 
+            LSRS        R0,R0,#28       	;shift R0 right
+            CMP         R0,#10          	;check if number is bigger than or equal to 10
+            BGE         ISHEX          		;if yes, it's a letter
+            ADDS        R0,R0,#48       	;if no, it's a number
+            B           PRNT        		;print the number
+ISHEX      	ADDS        R0,R0,#55       	;convert number to hex letter
+PRNT    	BL          PutChar         	;print the number
+            ADDS        R1,R1,#4        	;shift value += 4
+            CMP         R1,#32          	;if shift value is 32, no more characters 
+            BEQ         QUIT          		;then quit
+            B           LOOP         		;else loop
+QUIT      	POP         {R0,R1,R7,PC}   	;restore register values
+
+PutNumUB
+;Printss to the terminal screen 
+;the text decimal representation
+; of the unsigned byte value in R0.  
+;Inputs: R0
+;Outputs:
+;Register Modifications:
+
+			PUSH 		{R1, LR}		;preserve register values
+			MOVS 		R1, #0xFF		;Mask off everything but the last byte
+			ANDS 		R0, R0, R1
+			BL 			PutNumU
+			POP {R1, PC}
